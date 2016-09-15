@@ -31,6 +31,6 @@ if command == '':
 
 if daemonize:
     sys.argv.remove('-d')
-    os.system(' '.join(sys.argv) + ' 2>/tmp/fuck2 >/tmp/fuck </dev/null & echo $!')
+    os.system(' '.join(sys.argv) + ' 2>/dev/null >/dev/null </dev/null & echo $!')
 else:
     os.execl('/usr/bin/socat', 'socat', 'TCP-LISTEN:%d,reuseaddr,fork' % port, 'SYSTEM:' + command)
