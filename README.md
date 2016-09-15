@@ -1,0 +1,65 @@
+nclib
+=====
+
+nclib is netcat as a python library, or at least a couple of common things
+netcat can do.
+
+nclib provides:
+- Easy-to-use interfaces for connecting to and listening on TCP and UDP sockets
+- recv_until, receiving until a given substring comes over the wire
+- Highly customizable logging, including logging in hex encoding
+- Interactive mode, connecting the socket to your stdin/stdout
+- Intelligent detection of socket closes and connection drops
+- Long-running functions cleanly abortable with ctrl-c
+- Lots of aliases in case you forget the right method name
+- A script (serve-stdio) to easily daemonize command-line scripts, requires socat
+
+If you are familiar with pwntools, nclib provides much of the functionaly that
+pwntools' socket wrappers do, but with the bonus feature of not being pwntools.
+
+## Installation
+
+`pip install nclib`
+
+## Python examples
+
+Send a greeting to a UDP server listening at 192.168.3.6:8888 and log the
+response as hex:
+
+```python
+>>> nc = nclib.Netcat(('192.168.3.6', 8888), udp=True, verbose=True)
+>>> nc.echo_hex = True
+>>> nc.echo_sending = False
+>>> nc.send('Hello, world!')
+>>> nc.recv_all()
+```
+
+Listen for a local TCP connection on port 1234, allow the user to interact
+with the client. Log the entire interaction to log.txt.
+```python
+>>> logfile = open('log.txt', 'wb')
+>>> nc = nclib.Netcat(listen=('localhost', 1234), log_send=logfile, log_recv=logfile)
+>>> nc.interact()
+```
+
+## serve-stdio
+
+This is a simple command line wrapper for socat that can turn any program that
+works over stdin/stdout. The -d flag will daemonize the server, printing out
+its PID so you can kill it later.
+
+```bash
+$ sudo apt-get install socat
+$ serve-stdio -d 1234 echo hey
+13282
+$ nc localhost 1234
+hey
+```
+
+If you want the socket to see the process' stderr, you can redirect stderr
+into stdout, but you have to do it quotatively, otherwise the redirect applies
+to the socat process but not its children.
+
+```bash
+$ serve-stdio 1234 'strace echo hey 2>&1'
+```

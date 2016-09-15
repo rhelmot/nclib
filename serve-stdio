@@ -1,0 +1,36 @@
+#!/usr/bin/env python2
+
+import os, sys
+
+argiter = iter(sys.argv)
+progname = next(argiter)
+daemonize = False
+
+def usage():
+    print 'Usage: %s [options] port command ...' % sys.argv[0]
+    print 'Options:'
+    print '  -d       Daemonize'
+    sys.exit(1)
+
+for arg in argiter:
+    if arg == '-d':
+        daemonize = True
+    else:
+        break
+else:
+    usage()
+
+try:
+    port = int(arg) # pylint: disable=undefined-loop-variable
+except (ValueError, NameError):
+    usage()
+
+command = ' '.join(argiter)
+if command == '':
+    usage()
+
+if daemonize:
+    sys.argv.remove('-d')
+    os.system(' '.join(sys.argv) + ' 2>/tmp/fuck2 >/tmp/fuck </dev/null & echo $!')
+else:
+    os.execl('/usr/bin/socat', 'socat', 'TCP-LISTEN:%d,reuseaddr,fork' % port, 'SYSTEM:' + command)
