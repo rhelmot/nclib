@@ -1,7 +1,7 @@
 """
 Netcat as a library
 """
-import sys, select, os, socket, string
+import sys, select, os, socket, string, time
 
 __all__ = ('NetcatError', 'Netcat')
 
@@ -242,6 +242,45 @@ class Netcat(object):
         self.buf = ''
         return ret
 
+    def recv_timeout(self, timeout=0):
+        """
+        Return all data received within TIMEOUT seconds.
+        """
+        if self.verbose and self.echo_headers:
+            print '======== Receiving until timeout of {}s ========'.format(timeout)
+
+        start = time.time()
+        ret = ''
+        if self.buf:
+            ret = self.buf
+            self._log_recv(ret)
+
+        try:
+            while True:
+                dt = time.time()-start
+                if dt > timeout:
+                    break
+
+                self.sock.settimeout(timeout-dt)
+                a = self.sock.recv(4096)
+                if not a: break
+                self.buf += a
+                self._log_recv(a)
+        
+        except KeyboardInterrupt:
+            if self.verbose and self.echo_headers:
+                print '\n======== Connection interrupted! ========'
+        except socket.timeout:
+            pass
+        except (socket.error, NetcatError):
+            if self.verbose and self.echo_headers:
+                print '\n======== Connection dropped! ========'
+
+        self.sock.settimeout(None)
+        ret = self.buf
+        self.buf = ''
+        return ret
+        
     def send(self, s):
         """
         Sends all the given data to the socket.
@@ -301,10 +340,19 @@ class Netcat(object):
     get = recv
     write = send
     put = send
+    
     read_until = recv_until
     readuntil = recv_until
     recvuntil = recv_until
+    
+    read_timeout = recv_timeout
+    readtimeout = recv_timeout
+    recvtimeout = recv_timeout
+    
+    read_all = recv_all
+    readall = recv_all
     recvall = recv_all
+    
     interactive = interact
     ineraction = interact
 
