@@ -242,7 +242,7 @@ class Netcat(object):
         self.buf = ''
         return ret
 
-    def recv_timeout(self, timeout=0):
+    def recv_timeout(self, timeout):
         """
         Return all data received within TIMEOUT seconds.
         """
