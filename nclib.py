@@ -113,11 +113,13 @@ class Netcat(object):
         http://stackoverflow.com/questions/409783/socket-shutdown-vs-socket-close
         """
         return self.sock.shutdown(how)
+
     def shutdown_rd(self):
         """
         Send a shutdown signal for reading - you may no longer read from this socket
         """
         return self.shutdown(socket.SHUT_RD)
+
     def shutdown_wr(self):
         """
         Send a shutdown signal for reading - you may no longer write to this socket
@@ -190,9 +192,6 @@ class Netcat(object):
         Receive at most n bytes (default 4096) from the socket
         """
         self.timed_out = False
-
-        if timeout == 'default':
-            timeout = self._timeout
             
         if self.verbose and self.echo_headers:
             if timeout:
@@ -208,15 +207,18 @@ class Netcat(object):
             return ret
 
         try:
-            self.sock.settimeout(timeout)
+            if timeout != 'default':
+                self.sock.settimeout(timeout)
+
             self.buf += self.sock.recv(n - len(self.buf))
-            self.sock.settimeout(self._timeout)
             ret = self.buf
             self.buf = ''
         except socket.timeout:
             self.timed_out = True
         except socket.error:
             raise NetcatError('Socket error!')
+
+        self.sock.settimeout(self._timeout)
 
         if not timeout and ret == '':
             raise NetcatError("Connection dropped!")
@@ -243,12 +245,13 @@ class Netcat(object):
         start = time.time()
         try:
             while s not in self.buf:
-                dt = time.time()-start
-                if timeout and dt > timeout:
-                    break
-
-                if timeout:
+                if timeout is not None:
+                    dt = time.time()-start
+                    if dt > timeout:
+                        self.timed_out = True
+                        break
                     self.sock.settimeout(timeout-dt)
+
                 a = self.sock.recv(4096)
                 if a == '':
                     raise NetcatError("Connection dropped!")
@@ -280,12 +283,13 @@ class Netcat(object):
         start = time.time()
         try:
             while True:
-                dt = time.time()-start
-                if timeout and dt > timeout:
-                    break
-
-                if timeout:
+                if timeout is not None:
+                    dt = time.time()-start
+                    if dt > timeout:
+                        self.timed_out = True
+                        break
                     self.sock.settimeout(timeout-dt)
+
                 a = self.sock.recv(4096)
                 if not a: break
                 self.buf += a
@@ -305,19 +309,39 @@ class Netcat(object):
         self.buf = ''
         return ret
 
-    def recv_exactly(self, n):
+    def recv_exactly(self, n, timeout='default'):
         """
         Recieve exactly n bytes
         """
-        if self.verbose and self.echo_headers:
-            print '======== Receiving (exactly {0}) ========'.format(n)
+        self.timed_out = False
+        if timeout == 'default':
+            timeout = self._timeout
 
+        if self.verbose and self.echo_headers:
+            if timeout:
+                print '======== Receiving until exactly {0}B or timeout({})  ========'.format(n, timeout)
+            else:
+                print '======== Receiving until exactly {0}B  ========'.format(n)
+
+        start = time.time()
         try:
             while len(self.buf) < n:
+                if timeout is not None:
+                    dt = time.time()-start
+                    if dt > timeout:
+                        self.timed_out = True
+                        break
+                    self.sock.settimeout(timeout-dt)
+
                 a = self.sock.recv(n - len(self.buf))
                 if len(a) == 0:
                     raise NetcatError("Connection closed before {0} bytes received!".format(n))
                 self.buf += a
+        except KeyboardInterrupt:
+            if self.verbose and self.echo_headers:
+                print '\n======== Connection interrupted! ========'
+        except socket.timeout:
+            self.timed_out = True
         except socket.error:
             raise NetcatError("Socket error!")
 
@@ -345,9 +369,13 @@ class Netcat(object):
         """
         Connects the socket to the terminal for user interaction.
         Alternate input and output files may be specified.
+
+        This method cannot be used with a timeout.
         """
         if self.verbose and self.echo_headers:
             print '======== Beginning interactive session ========'
+
+        self.timed_out = False
 
         save_verbose = self.verbose
         self.verbose = 0
@@ -362,7 +390,7 @@ class Netcat(object):
                 r, _, _ = select.select([self.sock, insock], [], [])
                 for s in r:
                     if s == self.sock:
-                        a = self.recv()
+                        a = self.recv(timeout=None)
                         if a == '':
                             dropped = True
                         else:
@@ -393,6 +421,10 @@ class Netcat(object):
     read_all = recv_all
     readall = recv_all
     recvall = recv_all
+
+    read_exactly = recv_exactly
+    readexactly = recv_exactly
+    recvexactly = recv_exactly
     
     interactive = interact
     ineraction = interact
