@@ -242,6 +242,27 @@ class Netcat(object):
         self.buf = ''
         return ret
 
+    def recv_exactly(self, n):
+        """
+        Recieve exactly n bytes
+        """
+        if self.verbose and self.echo_headers:
+            print '======== Receiving (exactly {0}) ========'.format(n)
+
+        try:
+            while len(self.buf) < n:
+                a = self.sock.recv(n - len(self.buf))
+                if len(a) == 0:
+                    raise NetcatError("Connection closed before {0} bytes received!".format(n))
+                self.buf += a
+        except socket.error:
+            raise NetcatError("Socket error!")
+
+        out = self.buf[:n]
+        self.buf = self.buf[n:]
+        self._log_recv(out)
+        return out
+
     def send(self, s):
         """
         Sends all the given data to the socket.
