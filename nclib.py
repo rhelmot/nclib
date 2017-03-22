@@ -1,9 +1,10 @@
 """
 Netcat as a library
 """
+from __future__ import print_function
 import sys, select, os, socket, string, time
 
-__all__ = ('NetcatError', 'Netcat')
+__all__ = ('NetcatError', 'NetcatTimeout', 'Netcat')
 
 class NetcatError(Exception):
     pass
@@ -50,7 +51,7 @@ class Netcat(object):
                      Whether to raise a NetcatTimeout exception when a timeout is received. The
                      default is to return the empty string and set self.timed_out = True
         """
-        self.buf = ''
+        self.buf = b''
 
         self.verbose = verbose
         self.log_send = log_send
@@ -82,7 +83,7 @@ class Netcat(object):
                     self.peer_implicit = False
                     self._log_recv(self.buf)
                 if verbose:
-                    print 'Connection from %s accepted' % str(self.peer)
+                    print('Connection from %s accepted' % str(self.peer))
             else:
                 raise ValueError('Not enough arguments, need at least a server or a socket or a listening address!')
         else:
@@ -175,7 +176,7 @@ class Netcat(object):
     @staticmethod
     def _print_lines(s, prefix):
         for line in s.split('\n'):
-            print prefix + line
+            print(prefix + line)
 
     @staticmethod
     def _print_hex_lines(s, prefix):
@@ -193,7 +194,7 @@ class Netcat(object):
                     line += '.'
             line += ' '*(16 - len(sl))
             line += '|'
-            print line
+            print(line)
 
     def settimeout(self, timeout):
         """
@@ -241,11 +242,11 @@ class Netcat(object):
 
         if self.verbose and self.echo_headers:
             if timeout:
-                print '======== Receiving {0}B or until timeout ({1}) ========'.format(n, timeout)
+                print('======== Receiving {0}B or until timeout ({1}) ========'.format(n, timeout))
             else:
-                print '======== Receiving {0}B ========'.format(n)
+                print('======== Receiving {0}B ========'.format(n))
 
-        ret = ''
+        ret = b''
         if self.buf:
             ret = self.buf[:n]
             self.buf = self.buf[n:]
@@ -256,13 +257,13 @@ class Netcat(object):
                 self._settimeout(timeout)
 
             a = self._recv(n - len(self.buf))
-            if a == '':
+            if a == b'':
                 raise NetcatError("Connection dropped!")
             self._log_recv(a)
 
             self.buf += a
             ret = self.buf
-            self.buf = ''
+            self.buf = b''
         except socket.timeout:
             self.timed_out = True
             if self._raise_timeout:
@@ -272,7 +273,7 @@ class Netcat(object):
 
         self._settimeout(self._timeout)
 
-        if not timeout and ret == '':
+        if not timeout and ret == b'':
             raise NetcatError("Connection dropped!")
 
         return ret
@@ -289,9 +290,9 @@ class Netcat(object):
 
         if self.verbose and self.echo_headers:
             if timeout:
-                print '======== Receiving until {0} or timeout ({1}) ========'.format(repr(s), timeout)
+                print('======== Receiving until {0} or timeout ({1}) ========'.format(repr(s), timeout))
             else:
-                print '======== Receiving until {0} ========'.format(repr(s))
+                print('======== Receiving until {0} ========'.format(repr(s)))
 
         start = time.time()
         try:
@@ -304,7 +305,7 @@ class Netcat(object):
                     self._settimeout(timeout-dt)
 
                 a = self._recv(4096)
-                if a == '':
+                if a == b'':
                     raise NetcatError("Connection dropped!")
                 self._log_recv(a)
 
@@ -333,9 +334,9 @@ class Netcat(object):
 
         if self.verbose and self.echo_headers:
             if timeout:
-                print '======== Receiving until close or timeout ({}) ========'.format(timeout)
+                print('======== Receiving until close or timeout ({}) ========'.format(timeout))
             else:
-                print '======== Receiving until close ========'
+                print('======== Receiving until close ========')
 
         start = time.time()
         try:
@@ -354,18 +355,18 @@ class Netcat(object):
 
         except KeyboardInterrupt:
             if self.verbose and self.echo_headers:
-                print '\n======== Connection interrupted! ========'
+                print('\n======== Connection interrupted! ========')
         except socket.timeout:
             self.timed_out = True
             if self._raise_timeout:
                 raise NetcatTimeout()
         except (socket.error, NetcatError):
             if self.verbose and self.echo_headers:
-                print '\n======== Connection dropped! ========'
+                print('\n======== Connection dropped! ========')
 
         self._settimeout(self._timeout)
         ret = self.buf
-        self.buf = ''
+        self.buf = b''
         return ret
 
     def recv_exactly(self, n, timeout='default'):
@@ -378,9 +379,9 @@ class Netcat(object):
 
         if self.verbose and self.echo_headers:
             if timeout:
-                print '======== Receiving until exactly {0}B or timeout({1})  ========'.format(n, timeout)
+                print('======== Receiving until exactly {0}B or timeout({1})  ========'.format(n, timeout))
             else:
-                print '======== Receiving until exactly {0}B  ========'.format(n)
+                print('======== Receiving until exactly {0}B  ========'.format(n))
 
         start = time.time()
         try:
@@ -399,7 +400,7 @@ class Netcat(object):
                 self._log_recv(a)
         except KeyboardInterrupt:
             if self.verbose and self.echo_headers:
-                print '\n======== Connection interrupted! ========'
+                print('\n======== Connection interrupted! ========')
         except socket.timeout:
             self.timed_out = True
             if self._raise_timeout:
@@ -416,7 +417,7 @@ class Netcat(object):
         Sends all the given data to the socket.
         """
         if self.verbose and self.echo_headers:
-            print '======== Sending ({0}) ========'.format(len(s))
+            print('======== Sending ({0}) ========'.format(len(s)))
 
         self._log_send(s)
 
@@ -431,7 +432,10 @@ class Netcat(object):
         This method cannot be used with a timeout.
         """
         if self.verbose and self.echo_headers:
-            print '======== Beginning interactive session ========'
+            print('======== Beginning interactive session ========')
+
+        if hasattr(outsock, 'buffer'):
+            outsock = outsock.buffer    # pylint: disable=no-member
 
         self.timed_out = False
 
@@ -441,14 +445,14 @@ class Netcat(object):
             if self.buf:
                 outsock.write(self.buf)
                 outsock.flush()
-                self.buf = ''
+                self.buf = b''
             dropped = False
             while not dropped:
                 r, _, _ = select.select([self.sock, insock], [], [])
                 for s in r:
                     if s == self.sock:
                         a = self.recv(timeout=None)
-                        if a == '':
+                        if a == b'':
                             dropped = True
                         else:
                             outsock.write(a)
@@ -459,14 +463,14 @@ class Netcat(object):
             raise NetcatError
         except KeyboardInterrupt:
             if save_verbose and self.echo_headers:
-                print '\n======== Connection interrupted! ========'
+                print('\n======== Connection interrupted! ========')
         except (socket.error, NetcatError):
             if save_verbose and self.echo_headers:
-                print '\n======== Connection dropped! ========'
+                print('\n======== Connection dropped! ========')
         finally:
             self.verbose = save_verbose
 
-    LINE_ENDING = '\n'
+    LINE_ENDING = b'\n'
 
     def readline(self, max_size=None, timeout=None, ending=None):
         if ending is None: ending = self.LINE_ENDING
