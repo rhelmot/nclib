@@ -8,6 +8,9 @@ __all__ = ('NetcatError', 'Netcat')
 class NetcatError(Exception):
     pass
 
+class NetcatTimeout(NetcatError, socket.timeout):
+    pass
+
 class Netcat(object):
     """
     Example usage:
@@ -26,7 +29,7 @@ class Netcat(object):
     >>> nc = nclib.Netcat(listen=('localhost', 1234), log_send=logfile, log_recv=logfile)
     >>> nc.interact()
     """
-    def __init__(self, server=None, sock=None, listen=None, udp=False, verbose=0, log_send=None, log_recv=None):
+    def __init__(self, server=None, sock=None, listen=None, udp=False, verbose=0, log_send=None, log_recv=None, raise_timeout=False):
         """
         One of the following must be passed in order to initialize a Netcat object:
 
@@ -43,8 +46,21 @@ class Netcat(object):
                      will be duplicated to the file.
         log_send:    Pass a file-like object open for writing and all data recieved from the will
                      be logged to it.
+        raise_timeout:
+                     Whether to raise a NetcatTimeout exception when a timeout is received. The
+                     default is to return the empty string and set self.timed_out = True
         """
         self.buf = ''
+
+        self.verbose = verbose
+        self.log_send = log_send
+        self.log_recv = log_recv
+        self.echo_headers = True
+        self.echo_perline = True
+        self.echo_sending = True
+        self.echo_recving = True
+        self.echo_hex = False
+
         if sock is None:
             self.sock = socket.socket(type=socket.SOCK_DGRAM if udp else socket.SOCK_STREAM)
             if server is not None:
@@ -64,6 +80,7 @@ class Netcat(object):
                 else:
                     self.buf, self.peer = self.sock.recvfrom(1024)
                     self.peer_implicit = False
+                    self._log_recv(self.buf)
                 if verbose:
                     print 'Connection from %s accepted' % str(self.peer)
             else:
@@ -72,24 +89,22 @@ class Netcat(object):
             self.sock = sock
             self.peer_implicit = True
 
-        self.verbose = verbose
-        self.log_send = log_send
-        self.log_recv = log_recv
-        self.echo_headers = True
-        self.echo_perline = True
-        self.echo_sending = True
-        self.echo_recving = True
-        self.echo_hex = False
-        
-        self._timeout = None    # for settimeout
+        try:
+            self._timeout = self.sock.gettimeout()
+        except AttributeError:
+            self._timeout = None
         self.timed_out = False  # set when an operation times out
+        self._raise_timeout = raise_timeout
 
     def _head_buf(self, index=None):
         if index is None:
-            index = len(self.buf)
-        ret = self.buf[:index]
-        self.buf = self.buf[index:]
-        return ret
+            out = self.buf
+            self.buf = ''
+            return out
+        else:
+            out = self.buf[:index]
+            self.buf = self.buf[index:]
+            return out
 
     def close(self):
         """
@@ -122,7 +137,7 @@ class Netcat(object):
 
     def shutdown_wr(self):
         """
-        Send a shutdown signal for reading - you may no longer write to this socket
+        Send a shutdown signal for writing - you may no longer write to this socket
         """
         return self.shutdown(socket.SHUT_WR)
 
@@ -185,14 +200,45 @@ class Netcat(object):
         Set the default timeout in seconds to use for subsequent socket operations
         """
         self._timeout = timeout
-        self.sock.settimeout(timeout)
-            
+        self._settimeout(timeout)
+
+    def _send(self, data):
+        if hasattr(self.sock, 'send'):
+            if self.peer_implicit:
+                return self.sock.send(data)
+            else:
+                return self.sock.sendto(data, 0, self.peer)
+        elif hasattr(self.sock, 'write'):
+            return self.sock.write(data) # pylint: disable=no-member
+        else:
+            raise ValueError("I don't know how to write to this stream!")
+
+    def _recv(self, n):
+        if hasattr(self.sock, 'recv'):
+            return self.sock.recv(n)
+        elif hasattr(self.sock, 'read'):
+            return self.sock.read(n)    # pylint: disable=no-member
+        else:
+            raise ValueError("I don't know how to read from this stream!")
+
+    def _settimeout(self, timeout):
+        """
+        Internal method - catches failures when working with non-timeoutable streams, like files
+        """
+        try:
+            self.sock.settimeout(timeout)
+        except AttributeError:
+            pass
+
+    def gettimeout(self):
+        return self._timeout
+
     def recv(self, n=4096, timeout='default'):
         """
         Receive at most n bytes (default 4096) from the socket
         """
         self.timed_out = False
-            
+
         if self.verbose and self.echo_headers:
             if timeout:
                 print '======== Receiving {0}B or until timeout ({1}) ========'.format(n, timeout)
@@ -203,30 +249,35 @@ class Netcat(object):
         if self.buf:
             ret = self.buf[:n]
             self.buf = self.buf[n:]
-            self._log_recv(ret)
             return ret
 
         try:
             if timeout != 'default':
-                self.sock.settimeout(timeout)
+                self._settimeout(timeout)
 
-            self.buf += self.sock.recv(n - len(self.buf))
+            a = self._recv(n - len(self.buf))
+            if a == '':
+                raise NetcatError("Connection dropped!")
+            self._log_recv(a)
+
+            self.buf += a
             ret = self.buf
             self.buf = ''
         except socket.timeout:
             self.timed_out = True
+            if self._raise_timeout:
+                raise NetcatTimeout()
         except socket.error:
             raise NetcatError('Socket error!')
 
-        self.sock.settimeout(self._timeout)
+        self._settimeout(self._timeout)
 
         if not timeout and ret == '':
             raise NetcatError("Connection dropped!")
 
-        self._log_recv(ret)
         return ret
 
-    def recv_until(self, s, timeout='default'):
+    def recv_until(self, s, max_size=None, timeout='default'):
         """
         Recieve data from the socket until the given substring is observed.
         Data in the same datagram as the substring, following the substring,
@@ -235,7 +286,7 @@ class Netcat(object):
         self.timed_out = False
         if timeout == 'default':
             timeout = self._timeout
-        
+
         if self.verbose and self.echo_headers:
             if timeout:
                 print '======== Receiving until {0} or timeout ({1}) ========'.format(repr(s), timeout)
@@ -244,26 +295,32 @@ class Netcat(object):
 
         start = time.time()
         try:
-            while s not in self.buf:
+            while s not in self.buf and (max_size is None or len(self.buf) < max_size):
                 if timeout is not None:
                     dt = time.time()-start
                     if dt > timeout:
                         self.timed_out = True
                         break
-                    self.sock.settimeout(timeout-dt)
+                    self._settimeout(timeout-dt)
 
-                a = self.sock.recv(4096)
+                a = self._recv(4096)
                 if a == '':
                     raise NetcatError("Connection dropped!")
-                
                 self._log_recv(a)
+
                 self.buf += a
         except socket.timeout:
             self.timed_out = True
+            if self._raise_timeout:
+                raise NetcatTimeout()
 
-        self.sock.settimeout(self._timeout)
-        ret = self._head_buf(self.buf.index(s)+len(s) if not self.timed_out else None)
-        self._log_recv(ret)
+        self._settimeout(self._timeout)
+
+        cut_at = self.buf.index(s)+len(s)
+        if max_size is not None:
+            cut_at = min(cut_at, max_size)
+
+        ret = self._head_buf(cut_at if not self.timed_out else None)
         return ret
 
     def recv_all(self, timeout='default'):
@@ -288,9 +345,9 @@ class Netcat(object):
                     if dt > timeout:
                         self.timed_out = True
                         break
-                    self.sock.settimeout(timeout-dt)
+                    self._settimeout(timeout-dt)
 
-                a = self.sock.recv(4096)
+                a = self._recv(4096)
                 if not a: break
                 self.buf += a
                 self._log_recv(a)
@@ -300,11 +357,13 @@ class Netcat(object):
                 print '\n======== Connection interrupted! ========'
         except socket.timeout:
             self.timed_out = True
+            if self._raise_timeout:
+                raise NetcatTimeout()
         except (socket.error, NetcatError):
             if self.verbose and self.echo_headers:
                 print '\n======== Connection dropped! ========'
 
-        self.sock.settimeout(self._timeout)
+        self._settimeout(self._timeout)
         ret = self.buf
         self.buf = ''
         return ret
@@ -319,7 +378,7 @@ class Netcat(object):
 
         if self.verbose and self.echo_headers:
             if timeout:
-                print '======== Receiving until exactly {0}B or timeout({})  ========'.format(n, timeout)
+                print '======== Receiving until exactly {0}B or timeout({1})  ========'.format(n, timeout)
             else:
                 print '======== Receiving until exactly {0}B  ========'.format(n)
 
@@ -331,23 +390,25 @@ class Netcat(object):
                     if dt > timeout:
                         self.timed_out = True
                         break
-                    self.sock.settimeout(timeout-dt)
+                    self._settimeout(timeout-dt)
 
-                a = self.sock.recv(n - len(self.buf))
+                a = self._recv(n - len(self.buf))
                 if len(a) == 0:
                     raise NetcatError("Connection closed before {0} bytes received!".format(n))
                 self.buf += a
+                self._log_recv(a)
         except KeyboardInterrupt:
             if self.verbose and self.echo_headers:
                 print '\n======== Connection interrupted! ========'
         except socket.timeout:
             self.timed_out = True
+            if self._raise_timeout:
+                raise NetcatTimeout()
         except socket.error:
             raise NetcatError("Socket error!")
 
         out = self.buf[:n]
         self.buf = self.buf[n:]
-        self._log_recv(out)
         return out
 
     def send(self, s):
@@ -360,10 +421,7 @@ class Netcat(object):
         self._log_send(s)
 
         while s:
-            if self.peer_implicit:
-                s = s[self.sock.send(s):]
-            else:
-                s = s[self.sock.sendto(s, 0, self.peer):]
+            s = s[self._send(s):]
 
     def interact(self, insock=sys.stdin, outsock=sys.stdout):
         """
@@ -383,7 +441,6 @@ class Netcat(object):
             if self.buf:
                 outsock.write(self.buf)
                 outsock.flush()
-                self._log_recv(self.buf)
                 self.buf = ''
             dropped = False
             while not dropped:
@@ -409,15 +466,25 @@ class Netcat(object):
         finally:
             self.verbose = save_verbose
 
+    LINE_ENDING = '\n'
+
+    def readline(self, max_size=None, timeout=None, ending=None):
+        if ending is None: ending = self.LINE_ENDING
+        return self.recv_until(ending, max_size, timeout)
+
+    def writeline(self, line, ending=None):
+        if ending is None: ending = self.LINE_ENDING
+        return self.send(line + ending)
+
     read = recv
     get = recv
     write = send
     put = send
-    
+
     read_until = recv_until
     readuntil = recv_until
     recvuntil = recv_until
-    
+
     read_all = recv_all
     readall = recv_all
     recvall = recv_all
@@ -425,9 +492,21 @@ class Netcat(object):
     read_exactly = recv_exactly
     readexactly = recv_exactly
     recvexactly = recv_exactly
-    
+
     interactive = interact
     ineraction = interact
+
+    recvline = readline
+    read_line = readline
+    recv_line = readline
+    readln = readline
+    recvln = readline
+
+    sendline = writeline
+    send_line = writeline
+    write_line = writeline
+    writeln = writeline
+    sendln = writeline
 
 
 # congrats, you've found the secret in-progress command-line python netcat! it barely works.
