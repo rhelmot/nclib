@@ -2,15 +2,45 @@
 Netcat as a library
 """
 from __future__ import print_function
-import sys, select, os, socket, string, time
+import sys, select as _select, os, socket, string, time
 
-__all__ = ('NetcatError', 'NetcatTimeout', 'Netcat')
+__all__ = ('NetcatError', 'NetcatTimeout', 'Netcat', 'select')
 
 class NetcatError(Exception):
     pass
 
 class NetcatTimeout(NetcatError, socket.timeout):
     pass
+
+def select(*args, **kwargs):
+    timeout = kwargs.get('timeout', None)
+
+    if len(args) == 1 and hasattr(args, '__iter__'):
+        args = list(args[0])
+
+    out = []
+    toselect = []
+    for sock in args:
+        if type(sock) is Netcat and sock.buf:
+            out.append(sock)
+        else:
+            toselect.append(sock)
+
+    if not toselect:
+        return out
+
+    newgood = _select.select(toselect, [], [], 0)[0]
+
+    if out or len(newgood) == len(toselect) or timeout == 0:
+        # the `out or` part is the reason we need this clause
+        return out + newgood
+
+    toselect = [x for x in toselect if x not in newgood]
+    out += newgood
+
+    newgood = _select.select(toselect, [], [], timeout)[0]
+    return out + newgood
+
 
 class Netcat(object):
     """
@@ -30,7 +60,7 @@ class Netcat(object):
     >>> nc = nclib.Netcat(listen=('localhost', 1234), log_send=logfile, log_recv=logfile)
     >>> nc.interact()
     """
-    def __init__(self, server=None, sock=None, listen=None, udp=False, verbose=0, log_send=None, log_recv=None, raise_timeout=False):
+    def __init__(self, server=None, sock=None, listen=None, udp=False, verbose=0, log_send=None, log_recv=None, raise_timeout=False, retry=False, log_yield=False):
         """
         One of the following must be passed in order to initialize a Netcat object:
 
@@ -50,12 +80,18 @@ class Netcat(object):
         raise_timeout:
                      Whether to raise a NetcatTimeout exception when a timeout is received. The
                      default is to return the empty string and set self.timed_out = True
+        retry:       Whether to continuously retry establishing a connection if it fails.
+        log_yield:   Control when logging messages are generated on recv. By default, logging is
+                     done when data is received from the socket, and may be buffered. By setting
+                     this to true, logging is done when data is yielded to the user, either
+                     directly from the socket or from a buffer.
         """
         self.buf = b''
 
         self.verbose = verbose
         self.log_send = log_send
         self.log_recv = log_recv
+        self.log_yield = log_yield
         self.echo_headers = True
         self.echo_perline = True
         self.echo_sending = True
@@ -65,7 +101,16 @@ class Netcat(object):
         if sock is None:
             self.sock = socket.socket(type=socket.SOCK_DGRAM if udp else socket.SOCK_STREAM)
             if server is not None:
-                self.sock.connect(server)
+                while True:
+                    try:
+                        self.sock.connect(server)
+                    except socket.error:
+                        if retry:
+                            time.sleep(0.2)
+                        else:
+                            raise
+                    else:
+                        break
                 self.peer = server
                 self.peer_implicit = True
             elif listen is not None:
@@ -161,11 +206,12 @@ class Netcat(object):
                 sys.stdout.write(data)
             sys.stdout.flush()
 
-    def _log_recv(self, data):
-        if self.verbose and self.echo_recving:
-            self._log_something(data, '<< ')
-        if self.log_recv:
-            self.log_recv.write(data)
+    def _log_recv(self, data, yielding):
+        if yielding == self.log_yield:
+            if self.verbose and self.echo_recving:
+                self._log_something(data, '<< ')
+            if self.log_recv:
+                self.log_recv.write(data)
 
     def _log_send(self, data):
         if self.verbose and self.echo_sending:
@@ -250,6 +296,7 @@ class Netcat(object):
         if self.buf:
             ret = self.buf[:n]
             self.buf = self.buf[n:]
+            self._log_recv(ret, True)
             return ret
 
         try:
@@ -259,7 +306,7 @@ class Netcat(object):
             a = self._recv(n - len(self.buf))
             if a == b'':
                 raise NetcatError("Connection dropped!")
-            self._log_recv(a)
+            self._log_recv(a, False)
 
             self.buf += a
             ret = self.buf
@@ -276,6 +323,7 @@ class Netcat(object):
         if not timeout and ret == b'':
             raise NetcatError("Connection dropped!")
 
+        self._log_recv(ret, True)
         return ret
 
     def recv_until(self, s, max_size=None, timeout='default'):
@@ -307,7 +355,7 @@ class Netcat(object):
                 a = self._recv(4096)
                 if a == b'':
                     raise NetcatError("Connection dropped!")
-                self._log_recv(a)
+                self._log_recv(a, False)
 
                 self.buf += a
         except socket.timeout:
@@ -322,6 +370,7 @@ class Netcat(object):
             cut_at = min(cut_at, max_size)
 
         ret = self._head_buf(cut_at if not self.timed_out else None)
+        self._log_recv(ret, True)
         return ret
 
     def recv_all(self, timeout='default'):
@@ -351,7 +400,7 @@ class Netcat(object):
                 a = self._recv(4096)
                 if not a: break
                 self.buf += a
-                self._log_recv(a)
+                self._log_recv(a, False)
 
         except KeyboardInterrupt:
             if self.verbose and self.echo_headers:
@@ -367,6 +416,7 @@ class Netcat(object):
         self._settimeout(self._timeout)
         ret = self.buf
         self.buf = b''
+        self._log_recv(ret, True)
         return ret
 
     def recv_exactly(self, n, timeout='default'):
@@ -397,7 +447,7 @@ class Netcat(object):
                 if len(a) == 0:
                     raise NetcatError("Connection closed before {0} bytes received!".format(n))
                 self.buf += a
-                self._log_recv(a)
+                self._log_recv(a, False)
         except KeyboardInterrupt:
             if self.verbose and self.echo_headers:
                 print('\n======== Connection interrupted! ========')
@@ -410,6 +460,7 @@ class Netcat(object):
 
         out = self.buf[:n]
         self.buf = self.buf[n:]
+        self._log_recv(a, True)
         return out
 
     def send(self, s):
@@ -448,7 +499,7 @@ class Netcat(object):
                 self.buf = b''
             dropped = False
             while not dropped:
-                r, _, _ = select.select([self.sock, insock], [], [])
+                r, _, _ = _select.select([self.sock, insock], [], [])
                 for s in r:
                     if s == self.sock:
                         a = self.recv(timeout=None)
