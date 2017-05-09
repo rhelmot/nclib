@@ -535,6 +535,8 @@ class Netcat(object):
     get = recv
     write = send
     put = send
+    sendall = send
+    send_all = send
 
     read_until = recv_until
     readuntil = recv_until
