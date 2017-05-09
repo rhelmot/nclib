@@ -20,7 +20,7 @@ pwntools' socket wrappers do, but with the bonus feature of not being pwntools.
 
 from setuptools import setup
 setup(name='nclib',
-      version='0.6.0',
+      version='0.6.1',
       py_modules=['nclib'],
       scripts=['serve-stdio'],
       description='Netcat as a library: convienent socket interfaces',
