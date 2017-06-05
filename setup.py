@@ -10,7 +10,7 @@ nclib provides:
 - Intelligent detection of socket closes and connection drops
 - Long-running functions cleanly abortable with ctrl-c
 - Lots of aliases in case you forget the right method name
-- A script (serve-stdio) to easily daemonize command-line scripts, requires socat
+- A script (serve-stdio) to easily daemonize command-line scripts
 
 run help(nclib) for help.
 

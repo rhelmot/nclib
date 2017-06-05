@@ -1,5 +1,6 @@
 import socket
 
+from . import Netcat
 
 class TCPServer(object):
     """
@@ -32,7 +33,7 @@ class TCPServer(object):
     def __iter__(self):
         while True:
             client, addr = self.sock.accept()
-            yield Netcat(sock=client, peer=addr, **self.kwargs)
+            yield Netcat(sock=client, server=addr, **self.kwargs)
 
     def close(self):
         return self.sock.close()

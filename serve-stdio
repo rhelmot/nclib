@@ -4,28 +4,38 @@ from __future__ import print_function
 
 import os, sys
 import subprocess
-import tempfile
 import signal
+import nclib
 
 argiter = iter(sys.argv)
 progname = next(argiter)
 daemonize = False
-show_stderr = False
+show_stderr = None
+bind_addr = '0.0.0.0'
 
 def usage():
     print('Usage: %s [options] port command ...' % sys.argv[0])
     print('Options:')
     print('  -d       Daemonize')
     print('  -e       Redirect program\'s stderr to socket')
+    print('  -E       Hide program\'s stderr')
+    print('  -b addr  Bind to a specific address')
     sys.exit(1)
 
 for arg in argiter:
-    if arg == '-d':
-        daemonize = True
-    elif arg == '-e':
-        show_stderr = True
-    else:
-        break
+    try:
+        if arg == '-d':
+            daemonize = True
+        elif arg == '-e':
+            show_stderr = True
+        elif arg == '-E':
+            show_stderr = False
+        elif arg == '-b':
+            bind_addr = next(argiter)
+        else:
+            break
+    except StopIteration:
+        usage()
 else:
     usage()
 
@@ -48,34 +58,25 @@ if daemonize:
         sys.stdout.flush()
         os._exit(0)
 
-with tempfile.NamedTemporaryFile(delete=False) as tf:
-    tf.write(b'#!/bin/bash\nexec %s\n' % command.encode('utf-8'))
-os.chmod(tf.name, 0o755)
+children = []
+def reap():
+    i = 0
+    while i < len(children):
+        if children[i].poll() is not None:
+            children.pop(i)
+        else:
+            i += 1
 
-cmd = ['/usr/bin/socat', 'TCP-LISTEN:%d,reuseaddr,fork' % port, 'EXEC:%s' % tf.name]
-if show_stderr:
-    cmd[-1] += ',stderr'
-
-extra_args = {'close_fds': True}
-if daemonize:
-    NULL = open(os.devnull, 'r+')
-    extra_args['stdin'] = NULL
-    extra_args['stdout'] = NULL
-    extra_args['stderr'] = NULL
-
-# launch!
-p = subprocess.Popen(cmd, **extra_args)
-
-def onstop(signo, stack): # pylint: disable=unused-argument
-    os.unlink(tf.name)
-    try:
-        p.kill()
-    except OSError:
-        pass
+def cleanup(*args): # pylint: disable=unused-argument
+    for child in children:
+        child.kill() # not sure how effective this is, will probably only kill the shell...
+    print()
     sys.exit(0)
 
-signal.signal(signal.SIGTERM, onstop)
-signal.signal(signal.SIGINT, onstop)
+signal.signal(signal.SIGTERM, cleanup)
+signal.signal(signal.SIGINT, cleanup)
 
-p.wait()
-onstop(None, None)
+for client in nclib.TCPServer((bind_addr, port)):
+    print('Accepted client %s:%d' % client.peer)
+    children.append(nclib.Process.launch(command, client, stderr=show_stderr))
+    reap()

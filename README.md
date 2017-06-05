@@ -12,7 +12,7 @@ nclib provides:
 - Intelligent detection of socket closes and connection drops
 - Long-running functions cleanly abortable with ctrl-c
 - Lots of aliases in case you forget the right method name
-- A script (serve-stdio) to easily daemonize command-line scripts, requires socat
+- A script (serve-stdio) to easily daemonize command-line scripts, dependency-free
 
 If you are familiar with pwntools, nclib provides much of the functionaly that
 pwntools' socket wrappers do, but with the bonus feature of not being pwntools.
@@ -58,22 +58,18 @@ with the client. Log the entire interaction to log.txt.
 
 ## serve-stdio
 
-This is a simple command line wrapper for socat that can turn any program that
-works over stdin/stdout. The -d flag will daemonize the server, printing out
-its PID so you can kill it later.
+This is a utility that uses nclib to turn any program that works over
+stdin/stdout into a socket server. The -d flag will daemonize the server,
+printing out its PID so you can kill it later.
 
 ```bash
-$ sudo apt-get install socat
 $ serve-stdio -d 1234 echo hey
 13282
 $ nc localhost 1234
 hey
 ```
 
-If you want the socket to see the process' stderr, you can redirect stderr
-into stdout, but you have to do it quotatively, otherwise the redirect applies
-to the socat process but not its children.
-
-```bash
-$ serve-stdio 1234 'strace echo hey 2>&1'
-```
+By default, the process' stderr stream will be untouched and will probably end
+up printed to your terminal.  If you want the socket to see the process'
+stderr, you can use the -e flag. If you want the process' stderr to go away
+entirely, you can use the -E flag.

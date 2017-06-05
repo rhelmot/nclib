@@ -34,6 +34,7 @@ class Process(Netcat):
                             on your terminal.
         :param cwd:         The working directory to execute the program in
         :param env:         The environment to execute the program in, as a dictionary
+        :param protocol:    The socket protocol to use. 'tcp' by default, can also be 'udp'
 
         Any additional keyword arguments will be passed to the constructor of Netcat.
 
@@ -54,6 +55,9 @@ class Process(Netcat):
 
     def send_signal(self, sig):
         return self._subprocess.send_signal(sig)
+
+    def kill(self):
+        return self._subprocess.kill()
 
     @staticmethod
     def launch(program, sock, stderr=True, cwd=None, env=None):
@@ -94,7 +98,10 @@ class GDBProcess(Process):
                             on your terminal.
         :param cwd:         The working directory to execute the program in
         :param env:         The environment to execute the program in, as a dictionary
+        :param protocol:    The socket protocol to use. 'tcp' by default, can also be 'udp'
         :param gdbscript:   The filename of a script for gdb to execute automatically on startup
+
+        Any additional keyword arguments will be passed to the constructor of Netcat.
         """
         super(GDBProcess, self).__init__(program, **kwargs)
 
