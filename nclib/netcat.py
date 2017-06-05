@@ -4,43 +4,7 @@ Netcat as a library
 from __future__ import print_function
 import sys, select as _select, os, socket, string, time
 
-__all__ = ('NetcatError', 'NetcatTimeout', 'Netcat', 'select')
-
-class NetcatError(Exception):
-    pass
-
-class NetcatTimeout(NetcatError, socket.timeout):
-    pass
-
-def select(*args, **kwargs):
-    timeout = kwargs.get('timeout', None)
-
-    if len(args) == 1 and hasattr(args, '__iter__'):
-        args = list(args[0])
-
-    out = []
-    toselect = []
-    for sock in args:
-        if type(sock) is Netcat and sock.buf:
-            out.append(sock)
-        else:
-            toselect.append(sock)
-
-    if not toselect:
-        return out
-
-    newgood = _select.select(toselect, [], [], 0)[0]
-
-    if out or len(newgood) == len(toselect) or timeout == 0:
-        # the `out or` part is the reason we need this clause
-        return out + newgood
-
-    toselect = [x for x in toselect if x not in newgood]
-    out += newgood
-
-    newgood = _select.select(toselect, [], [], timeout)[0]
-    return out + newgood
-
+from .errors import NetcatError, NetcatTimeout
 
 class Netcat(object):
     """
@@ -112,7 +76,6 @@ class Netcat(object):
                     else:
                         break
                 self.peer = server
-                self.peer_implicit = True
             elif listen is not None:
                 self.sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
                 self.sock.bind(listen)
@@ -122,18 +85,17 @@ class Netcat(object):
                     self.sock.close()
                     self.sock = conn
                     self.peer = addr
-                    self.peer_implicit = True
                 else:
                     self.buf, self.peer = self.sock.recvfrom(1024)
-                    self.peer_implicit = False
-                    self._log_recv(self.buf)
+                    self.sock.connect(self.peer)
+                    self._log_recv(self.buf, False)
                 if verbose:
                     print('Connection from %s accepted' % str(self.peer))
             else:
                 raise ValueError('Not enough arguments, need at least a server or a socket or a listening address!')
         else:
             self.sock = sock
-            self.peer_implicit = True
+            self.peer = server
 
         try:
             self._timeout = self.sock.gettimeout()
@@ -251,10 +213,7 @@ class Netcat(object):
 
     def _send(self, data):
         if hasattr(self.sock, 'send'):
-            if self.peer_implicit:
-                return self.sock.send(data)
-            else:
-                return self.sock.sendto(data, 0, self.peer)
+            return self.sock.send(data)
         elif hasattr(self.sock, 'write'):
             return self.sock.write(data) # pylint: disable=no-member
         else:
