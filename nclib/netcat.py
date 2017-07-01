@@ -12,6 +12,7 @@ class Netcat(object):
 
     Send a greeting to a UDP server listening at 192.168.3.6:8888 and log the
     response as hex:
+
     >>> nc = nclib.Netcat(('192.168.3.6', 8888), udp=True, verbose=True)
     >>> nc.echo_hex = True
     >>> nc.echo_sending = False
@@ -20,35 +21,53 @@ class Netcat(object):
 
     Listen for a local TCP connection on port 1234, allow the user to interact
     with the client. Log the entire interaction to log.txt.
+
     >>> logfile = open('log.txt', 'wb')
     >>> nc = nclib.Netcat(listen=('localhost', 1234), log_send=logfile, log_recv=logfile)
     >>> nc.interact()
     """
-    def __init__(self, server=None, sock=None, listen=None, udp=False, verbose=0, log_send=None, log_recv=None, raise_timeout=False, retry=False, log_yield=False):
+    def __init__(self,
+            server=None,
+            sock=None,
+            listen=None,
+            udp=False,
+            verbose=0,
+            log_send=None,
+            log_recv=None,
+            raise_timeout=False,
+            retry=False,
+            log_yield=False):
         """
-        One of the following must be passed in order to initialize a Netcat object:
+        One of the following must be passed in order to initialize a Netcat
+        object:
 
-        sock:        a python socket object to wrap
-        server:      a tuple (host, port) to connect to
-        listen:      a tuple (host, port) to bind to for listening
+        :param sock:        a python socket object to wrap
+        :param server:      a tuple (host, port) to connect to
+        :param listen:      a tuple (host, port) to bind to for listening
 
         Additionally, the following options modify the behavior of the object:
 
-        udp:         Set to True to use udp connections when using the server or listen methods
-        verbose:     Set to True to log data sent/received. The echo_* properties on this object
-                     can be tweaked to describe exactly what you want logged.
-        log_send:    Pass a file-like object open for writing and all data sent over the socket
-                     will be duplicated to the file.
-        log_send:    Pass a file-like object open for writing and all data recieved from the will
-                     be logged to it.
-        raise_timeout:
-                     Whether to raise a NetcatTimeout exception when a timeout is received. The
-                     default is to return the empty string and set self.timed_out = True
-        retry:       Whether to continuously retry establishing a connection if it fails.
-        log_yield:   Control when logging messages are generated on recv. By default, logging is
-                     done when data is received from the socket, and may be buffered. By setting
-                     this to true, logging is done when data is yielded to the user, either
-                     directly from the socket or from a buffer.
+        :param udp:         Set to True to use udp connections when using the
+                            server or listen methods
+        :param verbose:     Set to True to log data sent/received. The echo_*
+                            properties on this object can be tweaked to
+                            describe exactly what you want logged.
+        :param log_send:    Pass a file-like object open for writing and all
+                            data sent over the socket will be written to it.
+        :param log_send:    Pass a file-like object open for writing and all
+                            data recieved from the socket will be written to it.
+        :param raise_timeout:
+                            Whether to raise a NetcatTimeout exception when a
+                            timeout is received. The default is to return the
+                            empty string and set self.timed_out = True
+        :param retry:       Whether to continuously retry establishing a
+                            connection if it fails.
+        :param log_yield:   Control when logging messages are generated on
+                            recv. By default, logging is done when data is
+                            received from the socket, and may be buffered.
+                            By setting this to true, logging is done when data
+                            is yielded to the user, either directly from the
+                            socket or from a buffer.
         """
         self.buf = b''
 
@@ -63,7 +82,8 @@ class Netcat(object):
         self.echo_hex = False
 
         if sock is None:
-            self.sock = socket.socket(type=socket.SOCK_DGRAM if udp else socket.SOCK_STREAM)
+            ty = socket.SOCK_DGRAM if udp else socket.SOCK_STREAM
+            self.sock = socket.socket(type=ty)
             if server is not None:
                 while True:
                     try:
@@ -92,7 +112,8 @@ class Netcat(object):
                 if verbose:
                     print('Connection from %s accepted' % str(self.peer))
             else:
-                raise ValueError('Not enough arguments, need at least a server or a socket or a listening address!')
+                raise ValueError('Not enough arguments, need at least a '
+                        'server or a socket or a listening address!')
         else:
             self.sock = sock
             self.peer = server
@@ -127,11 +148,11 @@ class Netcat(object):
 
         Shutdown differs from closing in that it explicitly changes the state of
         the socket resource to closed, whereas closing will only decrement the
-        number of peers on this end of the socket, since sockets can be a resource
-        shared by multiple peers on a single OS. When the number of peers reaches zero,
-        the socket is closed, but not deallocated, so you still need to call close.
-        (except that this is python and close is automatically called on the deletion
-        of the socket)
+        number of peers on this end of the socket, since sockets can be a
+        resource shared by multiple peers on a single OS. When the number of
+        peers reaches zero, the socket is closed, but not deallocated, so you
+        still need to call close. (except that this is python and close is
+        automatically called on the deletion of the socket)
 
         http://stackoverflow.com/questions/409783/socket-shutdown-vs-socket-close
         """
@@ -139,13 +160,15 @@ class Netcat(object):
 
     def shutdown_rd(self):
         """
-        Send a shutdown signal for reading - you may no longer read from this socket
+        Send a shutdown signal for reading - you may no longer read from this
+        socket.
         """
         return self.shutdown(socket.SHUT_RD)
 
     def shutdown_wr(self):
         """
-        Send a shutdown signal for writing - you may no longer write to this socket
+        Send a shutdown signal for writing - you may no longer write to this
+        socket.
         """
         return self.shutdown(socket.SHUT_WR)
 
@@ -206,7 +229,8 @@ class Netcat(object):
 
     def settimeout(self, timeout):
         """
-        Set the default timeout in seconds to use for subsequent socket operations
+        Set the default timeout in seconds to use for subsequent socket
+        operations
         """
         self._timeout = timeout
         self._settimeout(timeout)
@@ -229,7 +253,8 @@ class Netcat(object):
 
     def _settimeout(self, timeout):
         """
-        Internal method - catches failures when working with non-timeoutable streams, like files
+        Internal method - catches failures when working with non-timeoutable
+        streams, like files
         """
         try:
             self.sock.settimeout(timeout)
@@ -237,11 +262,16 @@ class Netcat(object):
             pass
 
     def gettimeout(self):
+        """
+        Retrieve the timeout currently associated with the socket
+        """
         return self._timeout
 
     def recv(self, n=4096, timeout='default'):
         """
         Receive at most n bytes (default 4096) from the socket
+
+        Aliases: read, get
         """
         self.timed_out = False
 
@@ -290,6 +320,8 @@ class Netcat(object):
         Recieve data from the socket until the given substring is observed.
         Data in the same datagram as the substring, following the substring,
         will not be returned and will be cached for future receives.
+
+        Aliases: read_until, readuntil, recvuntil
         """
         self.timed_out = False
         if timeout == 'default':
@@ -297,13 +329,16 @@ class Netcat(object):
 
         if self.verbose and self.echo_headers:
             if timeout:
-                print('======== Receiving until {0} or timeout ({1}) ========'.format(repr(s), timeout))
+                print('======== Receiving until {0} or timeout ({1}) ========'
+                        .format(repr(s), timeout))
             else:
-                print('======== Receiving until {0} ========'.format(repr(s)))
+                print('======== Receiving until {0} ========'
+                        .format(repr(s)))
 
         start = time.time()
         try:
-            while s not in self.buf and (max_size is None or len(self.buf) < max_size):
+            while s not in self.buf \
+                    and (max_size is None or len(self.buf) < max_size):
                 if timeout is not None:
                     dt = time.time()-start
                     if dt > timeout:
@@ -335,6 +370,8 @@ class Netcat(object):
     def recv_all(self, timeout='default'):
         """
         Return all data recieved until connection closes.
+
+        Aliases: read_all, readall, recvall
         """
         self.timed_out = False
         if timeout == 'default':
@@ -342,7 +379,8 @@ class Netcat(object):
 
         if self.verbose and self.echo_headers:
             if timeout:
-                print('======== Receiving until close or timeout ({}) ========'.format(timeout))
+                print('======== Receiving until close or timeout ({}) ========'
+                        .format(timeout))
             else:
                 print('======== Receiving until close ========')
 
@@ -381,6 +419,8 @@ class Netcat(object):
     def recv_exactly(self, n, timeout='default'):
         """
         Recieve exactly n bytes
+
+        Aliases: read_exactly, readexactly, recvexactly
         """
         self.timed_out = False
         if timeout == 'default':
@@ -388,9 +428,11 @@ class Netcat(object):
 
         if self.verbose and self.echo_headers:
             if timeout:
-                print('======== Receiving until exactly {0}B or timeout({1})  ========'.format(n, timeout))
+                print('======== Receiving until exactly {0}B or timeout({1})  ========'
+                        .format(n, timeout))
             else:
-                print('======== Receiving until exactly {0}B  ========'.format(n))
+                print('======== Receiving until exactly {0}B  ========'
+                        .format(n))
 
         start = time.time()
         try:
@@ -404,7 +446,8 @@ class Netcat(object):
 
                 a = self._recv(n - len(self.buf))
                 if len(a) == 0:
-                    raise NetcatError("Connection closed before {0} bytes received!".format(n))
+                    raise NetcatError("Connection closed before {0} bytes received!"
+                            .format(n))
                 self.buf += a
                 self._log_recv(a, False)
         except KeyboardInterrupt:
@@ -425,6 +468,8 @@ class Netcat(object):
     def send(self, s):
         """
         Sends all the given data to the socket.
+
+        Aliases: write, put, sendall, send_all
         """
         if self.verbose and self.echo_headers:
             print('======== Sending ({0}) ========'.format(len(s)))
@@ -440,6 +485,8 @@ class Netcat(object):
         Alternate input and output files may be specified.
 
         This method cannot be used with a timeout.
+
+        Aliases: interactive, interaction
         """
         if self.verbose and self.echo_headers:
             print('======== Beginning interactive session ========')
@@ -482,16 +529,30 @@ class Netcat(object):
 
     LINE_ENDING = b'\n'
 
-    def readline(self, max_size=None, timeout=None, ending=None):
+    def recv_line(self, max_size=None, timeout=None, ending=None):
+        """
+        Recieve until the next newline , default "\\n". The newline string can
+        be changed by changing ``nc.LINE_ENDING``. The newline will be returned
+        as part of the string.
+
+        Aliases: recvline, readline, read_line, readln, recvln
+        """
         if ending is None: ending = self.LINE_ENDING
         return self.recv_until(ending, max_size, timeout)
 
-    def writeline(self, line, ending=None):
+    def send_line(self, line, ending=None):
+        """
+        Write the string to the wire, followed by a newline. The newline string
+        can be changed by changing ``nc.LINE_ENDING``.
+
+        Aliases: sendline, writeline, write_line, writeln, sendln
+        """
         if ending is None: ending = self.LINE_ENDING
         return self.send(line + ending)
 
     read = recv
     get = recv
+
     write = send
     put = send
     sendall = send
@@ -512,17 +573,17 @@ class Netcat(object):
     interactive = interact
     ineraction = interact
 
-    recvline = readline
-    read_line = readline
-    recv_line = readline
-    readln = readline
-    recvln = readline
+    recvline = recv_line
+    readline = recv_line
+    read_line = recv_line
+    readln = recv_line
+    recvln = recv_line
 
-    sendline = writeline
-    send_line = writeline
-    write_line = writeline
-    writeln = writeline
-    sendln = writeline
+    sendline = send_line
+    writeline = send_line
+    write_line = send_line
+    writeln = send_line
+    sendln = send_line
 
 
 # congrats, you've found the secret in-progress command-line python netcat! it barely works.
