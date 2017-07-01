@@ -3,7 +3,6 @@
 from __future__ import print_function
 
 import os, sys
-import subprocess
 import signal
 import nclib
 
@@ -16,7 +15,7 @@ bind_addr = '0.0.0.0'
 def usage():
     print('Usage: %s [options] port command ...' % sys.argv[0])
     print('Options:')
-    print('  -d       Daemonize')
+    print('  -d       Daemonize, run in background')
     print('  -e       Redirect program\'s stderr to socket')
     print('  -E       Hide program\'s stderr')
     print('  -b addr  Bind to a specific address')

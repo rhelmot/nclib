@@ -18,11 +18,12 @@ nclib provides:
 - TCP and UDP server classes for writing simple python daemons
 - A script to easily daemonize command-line programs
 
-Documentation is available at https://nclib.readthedocs.io/ and source code is
-available at https://github.com/rhelmot/nclib
+Source code is available at https://github.com/rhelmot/nclib.
 
 If you are familiar with pwntools, nclib provides much of the functionaly that
 pwntools' socket wrappers do, but with the bonus feature of not being pwntools.
+
+To install nclib, run ``pip install nclib``.
 
 .. toctree::
    :maxdepth: 2
@@ -31,6 +32,7 @@ pwntools' socket wrappers do, but with the bonus feature of not being pwntools.
    netcat
    server
    process
+   serve-stdio
 
 
 Indices and tables
