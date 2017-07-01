@@ -7,8 +7,10 @@ from .netcat import Netcat
 
 class Process(Netcat):
     """
-    A mechanism for launching a local process and interacting with it programatically.
-    Provides the interfaces of both nclib.Netcat and subprocess.Popen objects.
+    A mechanism for launching a local process and interacting with it
+    programatically.  This class is a subclass of the basic `Netcat` object so
+    you may use any method from that class to interact with the process you've
+    launched!
 
     >>> from nclib import Process
     >>> cat = Process('cat')
@@ -48,22 +50,34 @@ class Process(Netcat):
         super(Process, self).__init__(sock=x, server='local program %s' % program, **kwargs)
 
     def poll(self):
+        """
+        Return the exit code of the proces, or None if it has not exited.
+        """
         return self._subprocess.poll()
 
     def wait(self):
+        """
+        Wait for the process to exit and return its exit code.
+        """
         return self._subprocess.wait()
 
     def send_signal(self, sig):
+        """
+        Send the signal `sig` to the process.
+        """
         return self._subprocess.send_signal(sig)
 
     def kill(self):
+        """
+        Terminate the process.
+        """
         return self._subprocess.kill()
 
     @staticmethod
     def launch(program, sock, stderr=True, cwd=None, env=None):
         """
-        A static method for launching a process that is connected to a given socket. Same rules
-        from the Process constructor apply.
+        A static method for launching a process that is connected to a given
+        socket. Same rules from the Process constructor apply.
         """
         if stderr is True:
             err = sock # redirect to socket
@@ -84,8 +98,8 @@ class Process(Netcat):
 
 class GDBProcess(Process):
     """
-    Like nclib.Process, but also launches gdb (in a new gnome-terminal window) to debug the
-    process.
+    Like nclib.Process, but also launches gdb (in a new gnome-terminal window)
+    to debug the process.
     """
     def __init__(self, program, gdbscript=None, **kwargs):
         """

@@ -36,6 +36,9 @@ class TCPServer(object):
             yield Netcat(sock=client, server=addr, **self.kwargs)
 
     def close(self):
+        """
+        Tear down this server and release its resources
+        """
         return self.sock.close()
 
 
@@ -53,6 +56,13 @@ class UDPServer(object):
 
     """
     def __init__(self, bindto, dgram_size=4096):
+        """
+        :param bindto:      The address to bind to, a tuple (host, port)
+        :param dgram_size:  The size of the datagram to receive. This is
+                            important! If you send a message longer than the
+                            receiver's receiving size, the rest of the message
+                            will be silently lost!
+        """
         self.addr = bindto
         self.dgram_size = dgram_size
         self.sock = socket.socket(type=socket.SOCK_DGRAM)
@@ -63,7 +73,17 @@ class UDPServer(object):
             yield packet, peer
 
     def respond(self, packet, peer, flags=0):
+        """
+        Send a message back to a peer.
+
+        :param packet:      The data to send
+        :param peer:        The address to send to, as a tuple (host, port)
+        :param flags:       Any sending flags you want to use for some reason
+        """
         self.sock.sendto(packet, flags, peer)
 
     def close(self):
+        """
+        Tear down this server and release its resources
+        """
         return self.sock.close()

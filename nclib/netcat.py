@@ -1,6 +1,3 @@
-"""
-Netcat as a library
-"""
 from __future__ import print_function
 import sys, select as _select, os, socket, string, time
 
@@ -8,6 +5,10 @@ from .errors import NetcatError, NetcatTimeout
 
 class Netcat(object):
     """
+    This is the main class you will use to interact with a peer over the
+    network! You may instanciate this class to either connect to a server or
+    listen for a one-off client.
+
     Example usage:
 
     Send a greeting to a UDP server listening at 192.168.3.6:8888 and log the
@@ -15,9 +16,20 @@ class Netcat(object):
 
     >>> nc = nclib.Netcat(('192.168.3.6', 8888), udp=True, verbose=True)
     >>> nc.echo_hex = True
-    >>> nc.echo_sending = False
-    >>> nc.send('Hello, world!')
-    >>> nc.recv_all()
+    >>> nc.send('\\x00\\x0dHello, world!')
+    >>> nc.recv()
+
+    Produces the following output::
+
+        ======== Sending (15) ========
+        >> 00 0D 48 65 6C 6C 6F 2C 20 77 6F 72 6C 64 21     |..Hello, world! |
+        ======== Receiving 4096B or until timeout (default) ========
+        << 00 57 68 65 6C 6C 6F 20 66 72 69 65 6E 64 2E 20  |.Whello friend. |
+        << 74 69 6D 65 20 69 73 20 73 68 6F 72 74 2E 20 70  |time is short. p|
+        << 6C 65 61 73 65 20 64 6F 20 6E 6F 74 20 77 6F 72  |lease do not wor|
+        << 72 79 2C 20 79 6F 75 20 77 69 6C 6C 20 66 69 6E  |ry, you will fin|
+        << 64 20 79 6F 75 72 20 77 61 79 2E 20 62 75 74 20  |d your way. but |
+        << 64 6F 20 68 75 72 72 79 2E                       |do hurry.       |
 
     Listen for a local TCP connection on port 1234, allow the user to interact
     with the client. Log the entire interaction to log.txt.
@@ -68,6 +80,25 @@ class Netcat(object):
                             By setting this to true, logging is done when data
                             is yielded to the user, either directly from the
                             socket or from a buffer.
+
+        Some properties that may be tweaked to change the logging behavior:
+
+        - nc.echo_headers controls whether to print a header describing each
+          network operation before the data (True)
+        - nc.echo_perline controls whether the data should be split on newlines
+          for logging (True)
+        - nc.echo_sending controls whether to log data on send (True)
+        - nc.echo_recving controls whether to log data on recv (True)
+        - nc.echo_hex controls whether to log data hex-encoded (False)
+        - nc.echo_send_prefix controls a prefix to print before each logged
+          line of sent data ('>> ')
+        - nc.echo_recv_prefix controls a prefix to print before each logged
+          line of received data ('<< ')
+
+        Note that these settings ONLY affect the console logging triggered by
+        the verbose parameter. They don't do anything to the logging triggered
+        by `log_send` and `log_recv`, which are meant to provide pristine
+        untouched records of network traffic.
         """
         self.buf = b''
 
@@ -80,6 +111,8 @@ class Netcat(object):
         self.echo_sending = True
         self.echo_recving = True
         self.echo_hex = False
+        self.echo_send_prefix = b'>> '
+        self.echo_recv_prefix = b'<< '
 
         if sock is None:
             ty = socket.SOCK_DGRAM if udp else socket.SOCK_STREAM
@@ -194,13 +227,13 @@ class Netcat(object):
     def _log_recv(self, data, yielding):
         if yielding == self.log_yield:
             if self.verbose and self.echo_recving:
-                self._log_something(data, '<< ')
+                self._log_something(data, self.echo_recv_prefix)
             if self.log_recv:
                 self.log_recv.write(data)
 
     def _log_send(self, data):
         if self.verbose and self.echo_sending:
-            self._log_something(data, '>> ')
+            self._log_something(data, self.echo_send_prefix)
         if self.log_send:
             self.log_send.write(data)
 
