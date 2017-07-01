@@ -21,10 +21,12 @@ nclib provides:
 If you are familiar with pwntools, nclib provides much of the functionaly that
 pwntools' socket wrappers do, but with the bonus feature of not being pwntools.
 
-## Installation
+Installation
+------------
 
 `pip install nclib`
 
-## Documentation
+Documentation
+-------------
 
 https://nclib.readthedocs.io/
