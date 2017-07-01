@@ -1,5 +1,5 @@
 long_description = '''
-nclib is a python library to make working with sockets easier.
+nclib is a python socket library that wants to be your friend.
 
 nclib provides:
 
@@ -16,7 +16,8 @@ nclib provides:
 - TCP and UDP server classes for writing simple python daemons
 - A script to easily daemonize command-line programs
 
-run help(nclib) for help.
+Documentation is available at https://nclib.readthedocs.io/ and source code is
+available at https://github.com/rhelmot/nclib
 
 If you are familiar with pwntools, nclib provides much of the functionaly that
 pwntools' socket wrappers do, but with the bonus feature of not being pwntools.
@@ -33,5 +34,5 @@ setup(name='nclib',
       author='rhelmot',
       author_email='andrewrdutcher@gmail.com',
       license='MIT',
-      keywords='netcat nc socket tcp udp recv until logging interact handle listen connect serve stdio'
+      keywords='netcat nc socket tcp udp recv until logging interact handle listen connect serve stdio process gdb'
       )

@@ -12,9 +12,35 @@ class Process(Netcat):
     you may use any method from that class to interact with the process you've
     launched!
 
+    :param program:     The program to launch. Can be either a list of strings,
+                        in which case those strings will become the program
+                        argv, or a single string, in which case the shell will
+                        be used to launch the program.
+    :param stderr:      How the program's stderr stream should behave. True
+                        (default) will redirect stderr to the output socket,
+                        unifying it with stdout. False will redirect it to
+                        /dev/null. None will not touch it, causing it to appear
+                        on your terminal.
+    :param cwd:         The working directory to execute the program in
+    :param env:         The environment to execute the program in, as a
+                        dictionary
+    :param protocol:    The socket protocol to use. 'tcp' by default, can also
+                        be 'udp'
+
+    Any additional keyword arguments will be passed to the constructor of
+    Netcat.
+
+    WARNING: If you provide a string and not a list as the description for the
+    program to launch, then the pid we know about will be associated with the
+    shell that launches the program, not the program itself.
+
+    *Example:* Launch the `cat` process and send it a greeting. Print out its
+    response. Close the socket and the process exits with status 0.
+
     >>> from nclib import Process
     >>> cat = Process('cat')
-    >>> print cat.send('Hello world!')
+    >>> cat.send('Hello world!')
+    >>> print cat.recv()
     Hello world!
     >>> cat.close()
     >>> print cat.poll()
@@ -26,24 +52,6 @@ class Process(Netcat):
             cwd=None,
             env=None,
             **kwargs):
-        """
-        :param program:     The program to launch. Can be either a list of strings, in which case
-                            those strings will become the program argv, or a single string, in which
-                            case the shell will be used to launch the program.
-        :param stderr:      How the program's stderr stream should behave. True (default) will
-                            redirect stderr to the output socket, unifying it with stdout. False will
-                            redirect it to /dev/null. None will not touch it, causing it to appear
-                            on your terminal.
-        :param cwd:         The working directory to execute the program in
-        :param env:         The environment to execute the program in, as a dictionary
-        :param protocol:    The socket protocol to use. 'tcp' by default, can also be 'udp'
-
-        Any additional keyword arguments will be passed to the constructor of Netcat.
-
-        WARNING: If you provide a string and not a list as the description for the program to
-        launch, then the pid we know about will be associated with the shell that launches the
-        program, not the program itself.
-        """
         x, y = socket.socketpair(socket.AF_UNIX, socket.SOCK_STREAM if protocol == 'tcp' else socket.SOCK_DGRAM)
         self._subprocess = self.launch(program, y, stderr=stderr, cwd=cwd, env=env)
         self.pid = self._subprocess.pid

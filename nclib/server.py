@@ -4,7 +4,14 @@ from . import Netcat
 
 class TCPServer(object):
     """
-    A simple TCP server model. Iterating over it will yield client sockets as Netcat objects.
+    A simple TCP server model. Iterating over it will yield client sockets as
+    Netcat objects.
+
+    :param bindto:          The address to bind to, a tuple (host, port)
+    :param kernel_backlog:  The argument to listen()
+
+    Any additional keyword arguments will be passed to the constructor of the
+    Netcat object that is constructed for each client.
 
     Here is a simple echo server example:
 
@@ -15,13 +22,6 @@ class TCPServer(object):
 
     """
     def __init__(self, bindto, kernel_backlog=5, **kwargs):
-        """
-        :param bindto:          The address to bind to, a tuple (host, port)
-        :param kernel_backlog:  The argument to listen()
-
-        Any additional keyword arguments will be passed to the constructor of the Netcat object
-        that is constructed for each client.
-        """
         self.addr = bindto
         self.kwargs = kwargs
 
@@ -44,8 +44,15 @@ class TCPServer(object):
 
 class UDPServer(object):
     """
-    A simple UDP server model. Iterating over it will yield of tuples of datagrams and peer
-    addresses. To respond, use the respond method, which takes the response and the peer address.
+    A simple UDP server model. Iterating over it will yield of tuples of
+    datagrams and peer addresses. To respond, use the respond method, which
+    takes the response and the peer address.
+
+    :param bindto:      The address to bind to, a tuple (host, port)
+    :param dgram_size:  The size of the datagram to receive. This is
+                        important! If you send a message longer than the
+                        receiver's receiving size, the rest of the message
+                        will be silently lost! Default is 4096.
 
     Here is a simple echo server example:
 
@@ -56,13 +63,6 @@ class UDPServer(object):
 
     """
     def __init__(self, bindto, dgram_size=4096):
-        """
-        :param bindto:      The address to bind to, a tuple (host, port)
-        :param dgram_size:  The size of the datagram to receive. This is
-                            important! If you send a message longer than the
-                            receiver's receiving size, the rest of the message
-                            will be silently lost!
-        """
         self.addr = bindto
         self.dgram_size = dgram_size
         self.sock = socket.socket(type=socket.SOCK_DGRAM)
