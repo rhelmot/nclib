@@ -64,7 +64,7 @@ class Netcat(object):
 
     >>> nc = nclib.Netcat(('192.168.3.6', 8888), udp=True, verbose=True)
     >>> nc.echo_hex = True
-    >>> nc.send('\\x00\\x0dHello, world!')
+    >>> nc.send(b'\\x00\\x0dHello, world!')
     ======== Sending (15) ========
     >> 00 0D 48 65 6C 6C 6F 2C 20 77 6F 72 6C 64 21     |..Hello, world! |
     >>> nc.recv()
@@ -233,25 +233,25 @@ class Netcat(object):
 
     @staticmethod
     def _print_lines(s, prefix):
-        for line in s.split('\n'):
+        for line in s.split(b'\n'):
             print(prefix + line)
 
     @staticmethod
     def _print_hex_lines(s, prefix):
-        for i in xrange(0, len(s), 16):
+        for i in range(0, len(s), 16):
             sl = s[i:i+16]
-            line = prefix + ' '.join('%02X' % ord(a) for a in sl)
+            line = prefix + b' '.join(b'%02X' % ord(a) for a in sl)
             if i + 16 >= len(s):
-                line += '   '*(16 - len(sl))
+                line += b'   '*(16 - len(sl))
 
-            line += '  |'
+            line += b'  |'
             for sc in sl:
-                if sc == ' ' or (sc in string.printable and sc not in string.whitespace):
+                if sc == b' ' or (sc in string.printable and sc not in string.whitespace):
                     line += sc
                 else:
-                    line += '.'
-            line += ' '*(16 - len(sl))
-            line += '|'
+                    line += b'.'
+            line += b' '*(16 - len(sl))
+            line += b'|'
             print(line)
 
     def settimeout(self, timeout):
