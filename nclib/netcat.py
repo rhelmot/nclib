@@ -489,7 +489,7 @@ class Netcat(object):
 
         out = self.buf[:n]
         self.buf = self.buf[n:]
-        self._log_recv(a, True)
+        self._log_recv(out, True)
         return out
 
     def send(self, s):
