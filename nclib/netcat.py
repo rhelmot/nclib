@@ -1,7 +1,23 @@
 from __future__ import print_function
-import sys, select as _select, os, socket, string, time
+import sys, select as _select, os, socket, string, time, re
 
 from .errors import NetcatError, NetcatTimeout
+
+protocol_re = re.compile('^[a-z]+://')
+
+if str is not bytes: # py3
+    long = int # pylint: disable=redefined-builtin
+    from urllib.parse import urlparse # pylint: disable=no-name-in-module,import-error
+else:
+    from urlparse import urlparse
+
+def is_ipv6_addr(addr):
+    try:
+        socket.inet_pton(socket.AF_INET6, addr)
+    except socket.error:
+        return False
+    else:
+        return True
 
 class Netcat(object):
     """
@@ -12,14 +28,20 @@ class Netcat(object):
     One of the following must be passed in order to initialize a Netcat
     object:
 
+    :param connect:     the address/port to connect to
+    :param listen:      the address/port to bind to for listening
     :param sock:        a python socket object to wrap
-    :param server:      a tuple (host, port) to connect to
-    :param listen:      a tuple (host, port) to bind to for listening
+
+    For ``connect`` and ``listen``, they accept basically any argument format
+    known to mankind. If you find an input format you think would be useful but
+    isn't accepted, let me know :P
 
     Additionally, the following options modify the behavior of the object:
 
     :param udp:         Set to True to use udp connections when using the
-                        server or listen methods
+                        connect or listen parameters
+    :param ipv6:        Force using ipv6 when using the connect or listen
+                        parameters
     :param verbose:     Set to True to log data sent/received. The echo_*
                         properties on this object can be tweaked to
                         describe exactly what you want logged.
@@ -39,6 +61,10 @@ class Netcat(object):
                         By setting this to true, logging is done when data
                         is yielded to the user, either directly from the
                         socket or from a buffer.
+
+    Any data that is extracted from the target address will override the
+    options specified here. For example, a url with the ``http:// scheme``
+    will go over tcp and port 80.
 
     Some properties that may be tweaked to change the logging behavior:
 
@@ -84,10 +110,12 @@ class Netcat(object):
     >>> nc.interact()
     """
     def __init__(self,
-            server=None,
+            connect=None,
             sock=None,
             listen=None,
+            server=None,
             udp=False,
+            ipv6=False,
             verbose=0,
             log_send=None,
             log_recv=None,
@@ -108,42 +136,47 @@ class Netcat(object):
         self.echo_send_prefix = b'>> '
         self.echo_recv_prefix = b'<< '
 
+        self.sock = None
+        self.peer = None
+
+        # case: Netcat(host, port)
+        if type(connect) is str and type(listen) is int:
+            connect = (connect, listen)
+
+        # case: Netcat(sock)
+        if type(connect) is socket.socket:
+            sock = connect
+            connect = None
+
+        # deprecated server kwarg
+        if server is not None:
+            connect = server
+
+        if sock is None and listen is None and connect is None:
+            raise ValueError('Not enough arguments, need at least an '
+                    'address or a socket or a listening address!')
+
+        ## we support passing connect as the "name" of the socket
+        #if sock is not None and (listen is not None or connect is not None):
+        #    raise ValueError("connect or listen arguments may not be "
+        #            "provided if sock is provided")
+
+        if listen is not None and connect is not None:
+            raise ValueError("connect and listen arguments cannot be provided at the same time")
+
         if sock is None:
-            ty = socket.SOCK_DGRAM if udp else socket.SOCK_STREAM
-            self.sock = socket.socket(type=ty)
-            if server is not None:
-                while True:
-                    try:
-                        self.sock.connect(server)
-                    except socket.error:
-                        if retry:
-                            time.sleep(0.2)
-                        else:
-                            raise
-                    else:
-                        break
-                self.peer = server
-            elif listen is not None:
-                self.sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-                self.sock.bind(listen)
-                if not udp:
-                    self.sock.listen(1)
-                    conn, addr = self.sock.accept()
-                    self.sock.close()
-                    self.sock = conn
-                    self.peer = addr
-                else:
-                    self.buf, self.peer = self.sock.recvfrom(1024)
-                    self.sock.connect(self.peer)
-                    self._log_recv(self.buf, False)
-                if verbose:
-                    print('Connection from %s accepted' % str(self.peer))
+            if listen is not None:
+                target = listen
+                listen = True
             else:
-                raise ValueError('Not enough arguments, need at least a '
-                        'server or a socket or a listening address!')
+                target = connect
+                listen = False
+
+            target, listen, udp, ipv6 = self._parse_target(target, listen, udp, ipv6)
+            self._connect(target, listen, udp, ipv6, retry)
         else:
             self.sock = sock
-            self.peer = server
+            self.peer = target
 
         try:
             self._timeout = self.sock.gettimeout()
@@ -151,6 +184,200 @@ class Netcat(object):
             self._timeout = None
         self.timed_out = False  # set when an operation times out
         self._raise_timeout = raise_timeout
+
+    @staticmethod
+    def _parse_target(target, listen, udp, ipv6):
+        """
+        Takes the basic version of the user args and extract as much data as
+        possible from target. Returns a tuple that is its arguments but
+        sanitized.
+        """
+        if type(target) is str:
+            if target.startswith('nc '):
+                out_host = None
+                out_port = None
+                pieces = target.split()[1:]
+                while pieces and pieces[0][0] == '-':
+                    if pieces[0] == '-u':
+                        udp = True
+                    elif pieces[0] == '-4':
+                        ipv6 = False
+                    elif pieces[0] == '-6':
+                        ipv6 = True
+                    elif pieces[0] == '-l':
+                        listen = True
+                    elif pieces[0] == '-p':
+                        out_port = int(pieces.pop(1))
+                    else:
+                        raise ValueError("Can't parse option %s" % pieces[0])
+                    pieces.pop(0)
+
+                if len(pieces) == 0:
+                    pass
+                elif len(pieces) == 1:
+                    if listen and pieces[0].isdigit():
+                        out_port = int(listen)
+                    else:
+                        out_host = pieces[0]
+                elif len(pieces) == 2:
+                    if pieces[1].isdigit():
+                        out_host = pieces[0]
+                        out_port = int(pieces[1])
+                    else:
+                        raise ValueError("Bad cmdline: %s" % target)
+                else:
+                    raise ValueError("Bad cmdline: %s" % target)
+
+                if out_host is None:
+                    if listen:
+                        out_host = '::' if ipv6 else '0.0.0.0'
+                    else:
+                        raise ValueError("Missing address: %s" % target)
+                if out_port is None:
+                    raise ValueError("Missing port: %s" % target)
+
+                if is_ipv6_addr(out_host):
+                    ipv6 = True
+
+                return (out_host, out_port), listen, udp, ipv6
+
+            elif protocol_re.match(target) is not None:
+                parsed = urlparse(target)
+                port = None
+
+                if parsed.scheme == 'tcp':
+                    udp = False
+                elif parsed.scheme == 'tcp4':
+                    udp = False
+                    ipv6 = False
+                elif parsed.scheme == 'tcp6':
+                    udp = False
+                    ipv6 = True
+                elif parsed.scheme == 'udp':
+                    udp = True
+                elif parsed.scheme == 'udp4':
+                    udp = True
+                    ipv6 = False
+                elif parsed.scheme == 'udp6':
+                    udp = True
+                    ipv6 = True
+                elif parsed.scheme == 'http':
+                    udp = False
+                    port = 80
+                elif parsed.scheme == 'https':
+                    udp = False
+                    port = 443
+                elif parsed.scheme == 'dns':
+                    udp = True
+                    port = 53
+                elif parsed.scheme == 'ftp':
+                    udp = False
+                    port = 20
+                elif parsed.scheme == 'ssh':
+                    udp = False
+                    port = 22
+                elif parsed.scheme == 'smtp':
+                    udp = False
+                    port = 25
+                else:
+                    raise ValueError("Unknown scheme: %s" % parsed.scheme)
+
+                if parsed.netloc.startswith('['):
+                    addr, extra = parsed.netloc[1:].split(']', 1)
+                    if extra.startswith(':'):
+                        port = int(extra[1:])
+                else:
+                    if ':' in parsed.netloc:
+                        addr, port = parsed.netloc.split(':', 1)
+                        port = int(port)
+                    else:
+                        addr = parsed.netloc
+
+                if addr is None or port is None:
+                    raise ValueError("Can't parse addr/port from %s" % target)
+
+                if is_ipv6_addr(addr):
+                    ipv6 = True
+
+                return (addr, port), listen, udp, ipv6
+
+            else:
+                if target.startswith('['):
+                    addr, extra = target[1:].split(']', 1)
+                    if extra.startswith(':'):
+                        port = int(extra[1:])
+                    else:
+                        port = None
+                else:
+                    if ':' in target:
+                        addr, port = target.split(':', 1)
+                        port = int(port)
+                    else:
+                        addr = target
+                        port = None
+
+                if port is None:
+                    raise ValueError("No port given: %s" % target)
+
+                if is_ipv6_addr(addr):
+                    ipv6 = True
+
+                return (addr, port), listen, udp, ipv6
+
+        elif type(target) in (int, long):
+            if listen:
+                out_port = target
+            else:
+                raise ValueError("Can't deal with number as connection address")
+
+            return ('::' if ipv6 else '0.0.0.0', out_port), listen, udp, ipv6
+
+        elif type(target) is tuple:
+            if len(target) >= 1 and type(target[0]) is str and is_ipv6_addr(target[0]):
+                ipv6 = True
+            return target, listen, udp, ipv6
+
+        else:
+            raise ValueError("Can't parse target: %r" % target)
+
+    def _connect(self, target, listen, udp, ipv6, retry):
+        """
+        Takes target/listen/udp/ipv6 and sets self.sock and self.peer
+        """
+        ty = socket.SOCK_DGRAM if udp else socket.SOCK_STREAM
+        fam = socket.AF_INET6 if ipv6 else socket.AF_INET
+        self.sock = socket.socket(fam, ty)
+        if listen:
+            self.sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+            self.sock.bind(target)
+            if not udp:
+                self.sock.listen(1)
+                conn, addr = self.sock.accept()
+                self.sock.close()
+                self.sock = conn
+                self.peer = addr
+            else:
+                self.buf, self.peer = self.sock.recvfrom(1024)
+                self.sock.connect(self.peer)
+                self._log_recv(self.buf, False)
+            if self.verbose:
+                print('Connection from %s accepted' % str(self.peer))
+        else:
+            while True:
+                try:
+                    self.sock.connect(target)
+                except (socket.gaierror, socket.herror) as e:
+                    raise NetcatError('Could not connect to %r: %r' \
+                            % (target, e))
+                except socket.error as e:
+                    if retry:
+                        time.sleep(0.2)
+                    else:
+                        raise NetcatError('Could not connect to %r: %r' \
+                                % (target, e))
+                else:
+                    break
+            self.peer = target
 
     def _head_buf(self, index=None):
         if index is None:
@@ -331,8 +558,8 @@ class Netcat(object):
             self.timed_out = True
             if self._raise_timeout:
                 raise NetcatTimeout()
-        except socket.error:
-            raise NetcatError('Socket error!')
+        except socket.error as e:
+            raise NetcatError('Socket error: %r' % e)
 
         self._settimeout(self._timeout)
 
@@ -484,8 +711,8 @@ class Netcat(object):
             self.timed_out = True
             if self._raise_timeout:
                 raise NetcatTimeout()
-        except socket.error:
-            raise NetcatError("Socket error!")
+        except socket.error as e:
+            raise NetcatError("Socket error: %r" % e)
 
         out = self.buf[:n]
         self.buf = self.buf[n:]
@@ -544,7 +771,7 @@ class Netcat(object):
                     else:
                         b = os.read(insock.fileno(), 4096)
                         self.send(b)
-            raise NetcatError
+            raise NetcatError("Connection dropped!")
         except KeyboardInterrupt:
             if save_verbose and self.echo_headers:
                 print('\n======== Connection interrupted! ========')
