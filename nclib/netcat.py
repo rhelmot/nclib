@@ -1,6 +1,6 @@
 import os
 import re
-import select as _select
+import select
 import socket
 import sys
 import time
@@ -683,21 +683,17 @@ class Netcat(object):
                 outsock.write(self.buf)
                 outsock.flush()
                 self.buf = b''
-            dropped = False
-            while not dropped:
-                r, _, _ = _select.select([self.sock, insock], [], [])
-                for s in r:
-                    if s == self.sock:
-                        a = self.recv(timeout=None)
-                        if a == b'':
-                            dropped = True
-                        else:
-                            outsock.write(a)
-                            outsock.flush()
-                    else:
-                        b = os.read(insock.fileno(), 4096)
-                        self.send(b)
-            raise NetcatError("Connection dropped!")
+
+            while True:
+                readable_socks, _, _ = select.select([self.sock, insock], [], [])
+                if self.sock in readable_socks:
+                    data = self.recv(timeout=None)
+                    if not data:
+                        raise NetcatError
+                    outsock.write(data)
+                    outsock.flush()
+                if insock in readable_socks:
+                    self.send(os.read(insock.fileno(), 4096))
         except KeyboardInterrupt:
             self.verbose = save_verbose
             self._print_header('\n======== Connection interrupted! ========')
