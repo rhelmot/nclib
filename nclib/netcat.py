@@ -26,12 +26,12 @@ KNOWN_SCHEMES = {
 }
 
 if str is not bytes: # py3
-    long = int # pylint: disable=redefined-builtin
+    long = int # pylint: disable=redefined-builtin,invalid-name
     from urllib.parse import urlparse # pylint: disable=no-name-in-module,import-error
 else:
-    from urlparse import urlparse
+    from urlparse import urlparse # pylint: disable=import-error
 
-def is_ipv6_addr(addr):
+def _is_ipv6_addr(addr):
     try:
         socket.inet_pton(socket.AF_INET6, addr)
     except socket.error:
@@ -130,18 +130,18 @@ class Netcat(object):
     >>> nc.interact()
     """
     def __init__(self,
-            connect=None,
-            sock=None,
-            listen=None,
-            server=None,
-            udp=False,
-            ipv6=False,
-            verbose=0,
-            log_send=None,
-            log_recv=None,
-            raise_timeout=False,
-            retry=False,
-            log_yield=False):
+                 connect=None,
+                 sock=None,
+                 listen=None,
+                 server=None,
+                 udp=False,
+                 ipv6=False,
+                 verbose=0,
+                 log_send=None,
+                 log_recv=None,
+                 raise_timeout=False,
+                 retry=False,
+                 log_yield=False):
         self.buf = b''
 
         self.verbose = verbose
@@ -174,7 +174,7 @@ class Netcat(object):
 
         if sock is None and listen is None and connect is None:
             raise ValueError('Not enough arguments, need at least an '
-                    'address or a socket or a listening address!')
+                             'address or a socket or a listening address!')
 
         ## we support passing connect as the "name" of the socket
         #if sock is not None and (listen is not None or connect is not None):
@@ -258,7 +258,7 @@ class Netcat(object):
                 if out_port is None:
                     raise ValueError("Missing port: %s" % target)
 
-                if is_ipv6_addr(out_host):
+                if _is_ipv6_addr(out_host):
                     ipv6 = True
 
                 return (out_host, out_port), listen, udp, ipv6
@@ -293,7 +293,7 @@ class Netcat(object):
                 if addr is None or port is None:
                     raise ValueError("Can't parse addr/port from %s" % target)
 
-                if is_ipv6_addr(addr):
+                if _is_ipv6_addr(addr):
                     ipv6 = True
 
                 return (addr, port), listen, udp, ipv6
@@ -316,7 +316,7 @@ class Netcat(object):
                 if port is None:
                     raise ValueError("No port given: %s" % target)
 
-                if is_ipv6_addr(addr):
+                if _is_ipv6_addr(addr):
                     ipv6 = True
 
                 return (addr, port), listen, udp, ipv6
@@ -363,15 +363,15 @@ class Netcat(object):
             while True:
                 try:
                     self.sock.connect(target)
-                except (socket.gaierror, socket.herror) as e:
+                except (socket.gaierror, socket.herror) as exc:
                     raise NetcatError('Could not connect to %r: %r' \
-                            % (target, e))
-                except socket.error as e:
+                            % (target, exc))
+                except socket.error as exc:
                     if retry:
                         time.sleep(0.2)
                     else:
                         raise NetcatError('Could not connect to %r: %r' \
-                                % (target, e))
+                                % (target, exc))
                 else:
                     break
             self.peer = target
@@ -509,11 +509,11 @@ class Netcat(object):
         else:
             raise ValueError("I don't know how to write to this stream!")
 
-    def _recv(self, n):
+    def _recv(self, size):
         if hasattr(self.sock, 'recv'):
-            return self.sock.recv(n)
+            return self.sock.recv(size)
         elif hasattr(self.sock, 'read'):
-            return self.sock.read(n)    # pylint: disable=no-member
+            return self.sock.read(size)    # pylint: disable=no-member
         else:
             raise ValueError("I don't know how to read from this stream!")
 
