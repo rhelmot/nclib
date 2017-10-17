@@ -1,3 +1,4 @@
+import getopt
 import os
 import re
 import select
@@ -215,35 +216,37 @@ class Netcat(object):
             if target.startswith('nc '):
                 out_host = None
                 out_port = None
-                pieces = target.split()[1:]
-                while pieces and pieces[0][0] == '-':
-                    if pieces[0] == '-u':
-                        udp = True
-                    elif pieces[0] == '-4':
-                        ipv6 = False
-                    elif pieces[0] == '-6':
-                        ipv6 = True
-                    elif pieces[0] == '-l':
-                        listen = True
-                    elif pieces[0] == '-p':
-                        out_port = int(pieces.pop(1))
-                    else:
-                        raise ValueError("Can't parse option %s" % pieces[0])
-                    pieces.pop(0)
 
-                if len(pieces) == 0:
+                try:
+                    opts, pieces = getopt.getopt(target.split()[1:], 'u46lp:',
+                                                 [])
+                except getopt.GetoptError as exc:
+                    raise ValueError(exc)
+
+                for opt, arg in opts:
+                    if opt == '-u':
+                        udp = True
+                    elif opt == '-4':
+                        ipv6 = False
+                    elif opt == '-6':
+                        ipv6 = True
+                    elif opt == '-l':
+                        listen = True
+                    elif opt == '-p':
+                        out_port = int(arg)
+                    else:
+                        assert False, "unhandled option"
+
+                if not pieces:
                     pass
                 elif len(pieces) == 1:
                     if listen and pieces[0].isdigit():
-                        out_port = int(listen)
+                        out_port = int(pieces[0])
                     else:
                         out_host = pieces[0]
-                elif len(pieces) == 2:
-                    if pieces[1].isdigit():
-                        out_host = pieces[0]
-                        out_port = int(pieces[1])
-                    else:
-                        raise ValueError("Bad cmdline: %s" % target)
+                elif len(pieces) == 2 and pieces[1].isdigit():
+                    out_host = pieces[0]
+                    out_port = int(pieces[1])
                 else:
                     raise ValueError("Bad cmdline: %s" % target)
 
