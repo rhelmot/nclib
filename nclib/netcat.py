@@ -7,7 +7,22 @@ import time
 
 from .errors import NetcatError, NetcatTimeout
 
-protocol_re = re.compile('^[a-z]+://')
+PROTOCAL_RE = re.compile('^[a-z0-9]+://')
+KNOWN_SCHEMES = {
+    # schema: (udp, ipv6, port); None = unchanged
+    'tcp': (False, None, None),
+    'tcp4': (False, False, None),
+    'tcp6': (False, True, None),
+    'udp': (True, None, None),
+    'udp4': (True, False, None),
+    'udp6': (True, True, None),
+    'http': (False, None, 80),
+    'https': (False, None, 443),
+    'dns': (True, None, 53),
+    'ftp': (False, None, 20),
+    'ssh': (False, None, 22),
+    'smtp': (False, None, 25),
+}
 
 if str is not bytes: # py3
     long = int # pylint: disable=redefined-builtin
@@ -245,46 +260,21 @@ class Netcat(object):
 
                 return (out_host, out_port), listen, udp, ipv6
 
-            elif protocol_re.match(target) is not None:
+            elif PROTOCAL_RE.match(target) is not None:
                 parsed = urlparse(target)
                 port = None
 
-                if parsed.scheme == 'tcp':
-                    udp = False
-                elif parsed.scheme == 'tcp4':
-                    udp = False
-                    ipv6 = False
-                elif parsed.scheme == 'tcp6':
-                    udp = False
-                    ipv6 = True
-                elif parsed.scheme == 'udp':
-                    udp = True
-                elif parsed.scheme == 'udp4':
-                    udp = True
-                    ipv6 = False
-                elif parsed.scheme == 'udp6':
-                    udp = True
-                    ipv6 = True
-                elif parsed.scheme == 'http':
-                    udp = False
-                    port = 80
-                elif parsed.scheme == 'https':
-                    udp = False
-                    port = 443
-                elif parsed.scheme == 'dns':
-                    udp = True
-                    port = 53
-                elif parsed.scheme == 'ftp':
-                    udp = False
-                    port = 20
-                elif parsed.scheme == 'ssh':
-                    udp = False
-                    port = 22
-                elif parsed.scheme == 'smtp':
-                    udp = False
-                    port = 25
-                else:
+                try:
+                    scheme_udp, scheme_ipv6, scheme_port = KNOWN_SCHEMES[parsed.scheme]
+                except KeyError:
                     raise ValueError("Unknown scheme: %s" % parsed.scheme)
+
+                if scheme_udp is not None:
+                    udp = scheme_udp
+                if scheme_ipv6 is not None:
+                    ipv6 = scheme_ipv6
+                if scheme_port is not None:
+                    port = scheme_port
 
                 if parsed.netloc.startswith('['):
                     addr, extra = parsed.netloc[1:].split(']', 1)
