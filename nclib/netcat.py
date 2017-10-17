@@ -379,16 +379,6 @@ class Netcat(object):
                     break
             self.peer = target
 
-    def _head_buf(self, index=None):
-        if index is None:
-            out = self.buf
-            self.buf = ''
-            return out
-        else:
-            out = self.buf[:index]
-            self.buf = self.buf[index:]
-            return out
-
     def close(self):
         """
         Close the socket.
@@ -505,6 +495,57 @@ class Netcat(object):
         else:
             raise ValueError("I don't know how to read from this stream!")
 
+    def _recv_predicate(self, predicate, timeout='default', raise_eof=True):
+        """
+        Receive until predicate returns a positive integer.
+        The returned number is the size to return.
+        """
+
+        if timeout == 'default':
+            timeout = self._timeout
+
+        self.timed_out = False
+
+        start = time.time()
+        try:
+            while True:
+                cut_at = predicate(self.buf)
+                if cut_at > 0:
+                    break
+                if timeout is not None:
+                    time_elapsed = time.time() - start
+                    if time_elapsed > timeout:
+                        raise socket.timeout
+                    self._settimeout(timeout - time_elapsed)
+
+                data = self._recv(4096)
+                if not data:
+                    if raise_eof:
+                        raise NetcatError("Connection dropped!")
+                    cut_at = len(self.buf)
+                    break
+
+                self._log_recv(data, False)
+
+                self.buf += data
+        except KeyboardInterrupt:
+            if self.verbose and self.echo_headers:
+                print('\n======== Connection interrupted! ========')
+        except socket.timeout:
+            self.timed_out = True
+            if self._raise_timeout:
+                raise NetcatTimeout()
+            return b''
+        except socket.error as exc:
+            raise NetcatError('Socket error: %r' % exc)
+
+        self._settimeout(self._timeout)
+
+        ret = self.buf[:cut_at]
+        self.buf = self.buf[cut_at:]
+        self._log_recv(ret, True)
+        return ret
+
     def _settimeout(self, timeout):
         """
         Internal method - catches failures when working with non-timeoutable
@@ -527,7 +568,6 @@ class Netcat(object):
 
         Aliases: read, get
         """
-        self.timed_out = False
 
         if self.verbose and self.echo_headers:
             if timeout:
@@ -535,39 +575,7 @@ class Netcat(object):
             else:
                 print('======== Receiving {0}B ========'.format(n))
 
-        ret = b''
-        if self.buf:
-            ret = self.buf[:n]
-            self.buf = self.buf[n:]
-            self._log_recv(ret, True)
-            return ret
-
-        try:
-            if timeout != 'default':
-                self._settimeout(timeout)
-
-            a = self._recv(n - len(self.buf))
-            if a == b'':
-                raise NetcatError("Connection dropped!")
-            self._log_recv(a, False)
-
-            self.buf += a
-            ret = self.buf
-            self.buf = b''
-        except socket.timeout:
-            self.timed_out = True
-            if self._raise_timeout:
-                raise NetcatTimeout()
-        except socket.error as e:
-            raise NetcatError('Socket error: %r' % e)
-
-        self._settimeout(self._timeout)
-
-        if not timeout and ret == b'':
-            raise NetcatError("Connection dropped!")
-
-        self._log_recv(ret, True)
-        return ret
+        return self._recv_predicate(lambda s: min(n, len(s)), timeout)
 
     def recv_until(self, s, max_size=None, timeout='default'):
         """
@@ -577,7 +585,6 @@ class Netcat(object):
 
         Aliases: read_until, readuntil, recvuntil
         """
-        self.timed_out = False
         if timeout == 'default':
             timeout = self._timeout
 
@@ -589,37 +596,15 @@ class Netcat(object):
                 print('======== Receiving until {0} ========'
                         .format(repr(s)))
 
-        start = time.time()
-        try:
-            while s not in self.buf \
-                    and (max_size is None or len(self.buf) < max_size):
-                if timeout is not None:
-                    dt = time.time()-start
-                    if dt > timeout:
-                        self.timed_out = True
-                        break
-                    self._settimeout(timeout-dt)
+        if max_size is None:
+            max_size = 2 ** 62
 
-                a = self._recv(4096)
-                if a == b'':
-                    raise NetcatError("Connection dropped!")
-                self._log_recv(a, False)
-
-                self.buf += a
-        except socket.timeout:
-            self.timed_out = True
-            if self._raise_timeout:
-                raise NetcatTimeout()
-
-        self._settimeout(self._timeout)
-
-        cut_at = self.buf.index(s)+len(s)
-        if max_size is not None:
-            cut_at = min(cut_at, max_size)
-
-        ret = self._head_buf(cut_at if not self.timed_out else None)
-        self._log_recv(ret, True)
-        return ret
+        def _predicate(buf):
+            try:
+                return min(buf.index(s) + len(s), max_size)
+            except ValueError:
+                return 0 if len(buf) < max_size else max_size
+        return self._recv_predicate(_predicate, timeout)
 
     def recv_all(self, timeout='default'):
         """
@@ -627,7 +612,6 @@ class Netcat(object):
 
         Aliases: read_all, readall, recvall
         """
-        self.timed_out = False
         if timeout == 'default':
             timeout = self._timeout
 
@@ -638,37 +622,7 @@ class Netcat(object):
             else:
                 print('======== Receiving until close ========')
 
-        start = time.time()
-        try:
-            while True:
-                if timeout is not None:
-                    dt = time.time()-start
-                    if dt > timeout:
-                        self.timed_out = True
-                        break
-                    self._settimeout(timeout-dt)
-
-                a = self._recv(4096)
-                if not a: break
-                self.buf += a
-                self._log_recv(a, False)
-
-        except KeyboardInterrupt:
-            if self.verbose and self.echo_headers:
-                print('\n======== Connection interrupted! ========')
-        except socket.timeout:
-            self.timed_out = True
-            if self._raise_timeout:
-                raise NetcatTimeout()
-        except (socket.error, NetcatError):
-            if self.verbose and self.echo_headers:
-                print('\n======== Connection dropped! ========')
-
-        self._settimeout(self._timeout)
-        ret = self.buf
-        self.buf = b''
-        self._log_recv(ret, True)
-        return ret
+        return self._recv_predicate(lambda s: 0, timeout, raise_eof=False)
 
     def recv_exactly(self, n, timeout='default'):
         """
@@ -676,7 +630,6 @@ class Netcat(object):
 
         Aliases: read_exactly, readexactly, recvexactly
         """
-        self.timed_out = False
         if timeout == 'default':
             timeout = self._timeout
 
@@ -688,36 +641,7 @@ class Netcat(object):
                 print('======== Receiving until exactly {0}B  ========'
                         .format(n))
 
-        start = time.time()
-        try:
-            while len(self.buf) < n:
-                if timeout is not None:
-                    dt = time.time()-start
-                    if dt > timeout:
-                        self.timed_out = True
-                        break
-                    self._settimeout(timeout-dt)
-
-                a = self._recv(n - len(self.buf))
-                if len(a) == 0:
-                    raise NetcatError("Connection closed before {0} bytes received!"
-                            .format(n))
-                self.buf += a
-                self._log_recv(a, False)
-        except KeyboardInterrupt:
-            if self.verbose and self.echo_headers:
-                print('\n======== Connection interrupted! ========')
-        except socket.timeout:
-            self.timed_out = True
-            if self._raise_timeout:
-                raise NetcatTimeout()
-        except socket.error as e:
-            raise NetcatError("Socket error: %r" % e)
-
-        out = self.buf[:n]
-        self.buf = self.buf[n:]
-        self._log_recv(out, True)
-        return out
+        return self._recv_predicate(lambda s: n if len(s) >= n else 0, timeout)
 
     def send(self, s):
         """
@@ -783,7 +707,7 @@ class Netcat(object):
 
     LINE_ENDING = b'\n'
 
-    def recv_line(self, max_size=None, timeout=None, ending=None):
+    def recv_line(self, max_size=None, timeout='default', ending=None):
         """
         Recieve until the next newline , default "\\n". The newline string can
         be changed by changing ``nc.LINE_ENDING``. The newline will be returned
