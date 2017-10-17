@@ -160,11 +160,11 @@ class Netcat(object):
         self.peer = None
 
         # case: Netcat(host, port)
-        if type(connect) is str and type(listen) is int:
+        if isinstance(connect, str) and isinstance(listen, int):
             connect = (connect, listen)
 
         # case: Netcat(sock)
-        if type(connect) is socket.socket:
+        if isinstance(connect, socket.socket):
             sock = connect
             connect = None
 
@@ -212,7 +212,7 @@ class Netcat(object):
         possible from target. Returns a tuple that is its arguments but
         sanitized.
         """
-        if type(target) is str:
+        if isinstance(target, str):
             if target.startswith('nc '):
                 out_host = None
                 out_port = None
@@ -321,7 +321,7 @@ class Netcat(object):
 
                 return (addr, port), listen, udp, ipv6
 
-        elif type(target) in (int, long):
+        elif isinstance(target, (int, long)):
             if listen:
                 out_port = target
             else:
@@ -329,8 +329,8 @@ class Netcat(object):
 
             return ('::' if ipv6 else '0.0.0.0', out_port), listen, udp, ipv6
 
-        elif type(target) is tuple:
-            if len(target) >= 1 and type(target[0]) is str and is_ipv6_addr(target[0]):
+        elif isinstance(target, tuple):
+            if len(target) >= 1 and isinstance(target[0], str) and _is_ipv6_addr(target[0]):
                 ipv6 = True
             return target, listen, udp, ipv6
 
@@ -706,7 +706,8 @@ class Netcat(object):
 
         Aliases: recvline, readline, read_line, readln, recvln
         """
-        if ending is None: ending = self.LINE_ENDING
+        if ending is None:
+            ending = self.LINE_ENDING
         return self.recv_until(ending, max_size, timeout)
 
     def send_line(self, line, ending=None):
@@ -716,7 +717,8 @@ class Netcat(object):
 
         Aliases: sendline, writeline, write_line, writeln, sendln
         """
-        if ending is None: ending = self.LINE_ENDING
+        if ending is None:
+            ending = self.LINE_ENDING
         return self.send(line + ending)
 
     read = recv
