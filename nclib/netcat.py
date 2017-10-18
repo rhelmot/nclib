@@ -1,17 +1,37 @@
-from __future__ import print_function
-import sys, select as _select, os, socket, string, time, re
+import getopt
+import os
+import re
+import select
+import socket
+import sys
+import time
 
 from .errors import NetcatError, NetcatTimeout
 
-protocol_re = re.compile('^[a-z]+://')
+PROTOCAL_RE = re.compile('^[a-z0-9]+://')
+KNOWN_SCHEMES = {
+    # schema: (udp, ipv6, port); None = unchanged
+    'tcp': (False, None, None),
+    'tcp4': (False, False, None),
+    'tcp6': (False, True, None),
+    'udp': (True, None, None),
+    'udp4': (True, False, None),
+    'udp6': (True, True, None),
+    'http': (False, None, 80),
+    'https': (False, None, 443),
+    'dns': (True, None, 53),
+    'ftp': (False, None, 20),
+    'ssh': (False, None, 22),
+    'smtp': (False, None, 25),
+}
 
 if str is not bytes: # py3
-    long = int # pylint: disable=redefined-builtin
+    long = int # pylint: disable=redefined-builtin,invalid-name
     from urllib.parse import urlparse # pylint: disable=no-name-in-module,import-error
 else:
-    from urlparse import urlparse
+    from urlparse import urlparse # pylint: disable=import-error
 
-def is_ipv6_addr(addr):
+def _is_ipv6_addr(addr):
     try:
         socket.inet_pton(socket.AF_INET6, addr)
     except socket.error:
@@ -110,18 +130,18 @@ class Netcat(object):
     >>> nc.interact()
     """
     def __init__(self,
-            connect=None,
-            sock=None,
-            listen=None,
-            server=None,
-            udp=False,
-            ipv6=False,
-            verbose=0,
-            log_send=None,
-            log_recv=None,
-            raise_timeout=False,
-            retry=False,
-            log_yield=False):
+                 connect=None,
+                 sock=None,
+                 listen=None,
+                 server=None,
+                 udp=False,
+                 ipv6=False,
+                 verbose=0,
+                 log_send=None,
+                 log_recv=None,
+                 raise_timeout=False,
+                 retry=False,
+                 log_yield=False):
         self.buf = b''
 
         self.verbose = verbose
@@ -133,18 +153,18 @@ class Netcat(object):
         self.echo_sending = True
         self.echo_recving = True
         self.echo_hex = False
-        self.echo_send_prefix = b'>> '
-        self.echo_recv_prefix = b'<< '
+        self.echo_send_prefix = '>> '
+        self.echo_recv_prefix = '<< '
 
         self.sock = None
         self.peer = None
 
         # case: Netcat(host, port)
-        if type(connect) is str and type(listen) is int:
+        if isinstance(connect, str) and isinstance(listen, int):
             connect = (connect, listen)
 
         # case: Netcat(sock)
-        if type(connect) is socket.socket:
+        if isinstance(connect, socket.socket):
             sock = connect
             connect = None
 
@@ -154,7 +174,7 @@ class Netcat(object):
 
         if sock is None and listen is None and connect is None:
             raise ValueError('Not enough arguments, need at least an '
-                    'address or a socket or a listening address!')
+                             'address or a socket or a listening address!')
 
         ## we support passing connect as the "name" of the socket
         #if sock is not None and (listen is not None or connect is not None):
@@ -192,39 +212,41 @@ class Netcat(object):
         possible from target. Returns a tuple that is its arguments but
         sanitized.
         """
-        if type(target) is str:
+        if isinstance(target, str):
             if target.startswith('nc '):
                 out_host = None
                 out_port = None
-                pieces = target.split()[1:]
-                while pieces and pieces[0][0] == '-':
-                    if pieces[0] == '-u':
-                        udp = True
-                    elif pieces[0] == '-4':
-                        ipv6 = False
-                    elif pieces[0] == '-6':
-                        ipv6 = True
-                    elif pieces[0] == '-l':
-                        listen = True
-                    elif pieces[0] == '-p':
-                        out_port = int(pieces.pop(1))
-                    else:
-                        raise ValueError("Can't parse option %s" % pieces[0])
-                    pieces.pop(0)
 
-                if len(pieces) == 0:
+                try:
+                    opts, pieces = getopt.getopt(target.split()[1:], 'u46lp:',
+                                                 [])
+                except getopt.GetoptError as exc:
+                    raise ValueError(exc)
+
+                for opt, arg in opts:
+                    if opt == '-u':
+                        udp = True
+                    elif opt == '-4':
+                        ipv6 = False
+                    elif opt == '-6':
+                        ipv6 = True
+                    elif opt == '-l':
+                        listen = True
+                    elif opt == '-p':
+                        out_port = int(arg)
+                    else:
+                        assert False, "unhandled option"
+
+                if not pieces:
                     pass
                 elif len(pieces) == 1:
                     if listen and pieces[0].isdigit():
-                        out_port = int(listen)
+                        out_port = int(pieces[0])
                     else:
                         out_host = pieces[0]
-                elif len(pieces) == 2:
-                    if pieces[1].isdigit():
-                        out_host = pieces[0]
-                        out_port = int(pieces[1])
-                    else:
-                        raise ValueError("Bad cmdline: %s" % target)
+                elif len(pieces) == 2 and pieces[1].isdigit():
+                    out_host = pieces[0]
+                    out_port = int(pieces[1])
                 else:
                     raise ValueError("Bad cmdline: %s" % target)
 
@@ -236,51 +258,26 @@ class Netcat(object):
                 if out_port is None:
                     raise ValueError("Missing port: %s" % target)
 
-                if is_ipv6_addr(out_host):
+                if _is_ipv6_addr(out_host):
                     ipv6 = True
 
                 return (out_host, out_port), listen, udp, ipv6
 
-            elif protocol_re.match(target) is not None:
+            elif PROTOCAL_RE.match(target) is not None:
                 parsed = urlparse(target)
                 port = None
 
-                if parsed.scheme == 'tcp':
-                    udp = False
-                elif parsed.scheme == 'tcp4':
-                    udp = False
-                    ipv6 = False
-                elif parsed.scheme == 'tcp6':
-                    udp = False
-                    ipv6 = True
-                elif parsed.scheme == 'udp':
-                    udp = True
-                elif parsed.scheme == 'udp4':
-                    udp = True
-                    ipv6 = False
-                elif parsed.scheme == 'udp6':
-                    udp = True
-                    ipv6 = True
-                elif parsed.scheme == 'http':
-                    udp = False
-                    port = 80
-                elif parsed.scheme == 'https':
-                    udp = False
-                    port = 443
-                elif parsed.scheme == 'dns':
-                    udp = True
-                    port = 53
-                elif parsed.scheme == 'ftp':
-                    udp = False
-                    port = 20
-                elif parsed.scheme == 'ssh':
-                    udp = False
-                    port = 22
-                elif parsed.scheme == 'smtp':
-                    udp = False
-                    port = 25
-                else:
+                try:
+                    scheme_udp, scheme_ipv6, scheme_port = KNOWN_SCHEMES[parsed.scheme]
+                except KeyError:
                     raise ValueError("Unknown scheme: %s" % parsed.scheme)
+
+                if scheme_udp is not None:
+                    udp = scheme_udp
+                if scheme_ipv6 is not None:
+                    ipv6 = scheme_ipv6
+                if scheme_port is not None:
+                    port = scheme_port
 
                 if parsed.netloc.startswith('['):
                     addr, extra = parsed.netloc[1:].split(']', 1)
@@ -296,7 +293,7 @@ class Netcat(object):
                 if addr is None or port is None:
                     raise ValueError("Can't parse addr/port from %s" % target)
 
-                if is_ipv6_addr(addr):
+                if _is_ipv6_addr(addr):
                     ipv6 = True
 
                 return (addr, port), listen, udp, ipv6
@@ -319,12 +316,12 @@ class Netcat(object):
                 if port is None:
                     raise ValueError("No port given: %s" % target)
 
-                if is_ipv6_addr(addr):
+                if _is_ipv6_addr(addr):
                     ipv6 = True
 
                 return (addr, port), listen, udp, ipv6
 
-        elif type(target) in (int, long):
+        elif isinstance(target, (int, long)):
             if listen:
                 out_port = target
             else:
@@ -332,8 +329,8 @@ class Netcat(object):
 
             return ('::' if ipv6 else '0.0.0.0', out_port), listen, udp, ipv6
 
-        elif type(target) is tuple:
-            if len(target) >= 1 and type(target[0]) is str and is_ipv6_addr(target[0]):
+        elif isinstance(target, tuple):
+            if len(target) >= 1 and isinstance(target[0], str) and _is_ipv6_addr(target[0]):
                 ipv6 = True
             return target, listen, udp, ipv6
 
@@ -361,33 +358,23 @@ class Netcat(object):
                 self.sock.connect(self.peer)
                 self._log_recv(self.buf, False)
             if self.verbose:
-                print('Connection from %s accepted' % str(self.peer))
+                self._print_verbose('Connection from %s accepted' % str(self.peer))
         else:
             while True:
                 try:
                     self.sock.connect(target)
-                except (socket.gaierror, socket.herror) as e:
+                except (socket.gaierror, socket.herror) as exc:
                     raise NetcatError('Could not connect to %r: %r' \
-                            % (target, e))
-                except socket.error as e:
+                            % (target, exc))
+                except socket.error as exc:
                     if retry:
                         time.sleep(0.2)
                     else:
                         raise NetcatError('Could not connect to %r: %r' \
-                                % (target, e))
+                                % (target, exc))
                 else:
                     break
             self.peer = target
-
-    def _head_buf(self, index=None):
-        if index is None:
-            out = self.buf
-            self.buf = ''
-            return out
-        else:
-            out = self.buf[:index]
-            self.buf = self.buf[index:]
-            return out
 
     def close(self):
         """
@@ -432,6 +419,25 @@ class Netcat(object):
         """
         return self.sock.fileno()
 
+    def _print_verbose(self, s):
+        assert isinstance(s, str), "s should be str"
+        sys.stdout.write(s + '\n')
+
+    def _print_header(self, header):
+        if self.verbose and self.echo_headers:
+            self._print_verbose(header)
+
+    def _print_recv_header(self, fmt, timeout, *args):
+        if self.verbose and self.echo_headers:
+            if timeout == 'default':
+                timeout = self._timeout
+            if timeout is not None:
+                timeout_text = ' or until timeout ({0})'.format(timeout)
+            else:
+                timeout_text = ''
+
+            self._print_verbose(fmt.format(*args, timeout_text=timeout_text))
+
     def _log_something(self, data, prefix):
         if self.echo_perline:
             if self.echo_hex:
@@ -440,10 +446,12 @@ class Netcat(object):
                 self._print_lines(data, prefix)
         else:
             if self.echo_hex:
-                sys.stdout.write(data.encode('hex'))
+                if hasattr(data, 'hex'):
+                    self._print_verbose(prefix + data.hex())
+                else:
+                    self._print_verbose(prefix + data.encode('hex'))
             else:
-                sys.stdout.write(data)
-            sys.stdout.flush()
+                self._print_verbose(prefix + str(data))
 
     def _log_recv(self, data, yielding):
         if yielding == self.log_yield:
@@ -458,28 +466,32 @@ class Netcat(object):
         if self.log_send:
             self.log_send.write(data)
 
-    @staticmethod
-    def _print_lines(s, prefix):
+    def _print_lines(self, s, prefix):
         for line in s.split(b'\n'):
-            print(prefix + line)
+            self._print_verbose(prefix + str(line))
 
     @staticmethod
-    def _print_hex_lines(s, prefix):
-        for i in range(0, len(s), 16):
-            sl = s[i:i+16]
-            line = prefix + b' '.join(b'%02X' % ord(a) for a in sl)
-            if i + 16 >= len(s):
-                line += b'   '*(16 - len(sl))
+    def _to_spaced_hex(s):
+        if isinstance(s, str):
+            return ' '.join('%02X' % ord(a) for a in s)
+        if isinstance(s, bytes):
+            return ' '.join('%02X' % a for a in s)
+        raise TypeError('expected str or bytes instance')
 
-            line += b'  |'
-            for sc in sl:
-                if sc == b' ' or (sc in string.printable and sc not in string.whitespace):
-                    line += sc
-                else:
-                    line += b'.'
-            line += b' '*(16 - len(sl))
-            line += b'|'
-            print(line)
+    @staticmethod
+    def _to_printable_str(s):
+        if isinstance(s, str):
+            return ''.join(a if ' ' <= a <= '~' else '.' for a in s)
+        if isinstance(s, bytes):
+            return ''.join(chr(a) if ord(' ') <= a <= ord('~') else '.' for a in s)
+        raise TypeError('expected str or bytes instance')
+
+    def _print_hex_lines(self, s, prefix):
+        for i in range(0, len(s), 16):
+            block = s[i:i+16]
+            spaced_hex = self._to_spaced_hex(block)
+            printable_str = self._to_printable_str(block)
+            self._print_verbose('%s%-47s  |%-16s|' % (prefix, spaced_hex, printable_str))
 
     def settimeout(self, timeout):
         """
@@ -497,13 +509,63 @@ class Netcat(object):
         else:
             raise ValueError("I don't know how to write to this stream!")
 
-    def _recv(self, n):
+    def _recv(self, size):
         if hasattr(self.sock, 'recv'):
-            return self.sock.recv(n)
+            return self.sock.recv(size)
         elif hasattr(self.sock, 'read'):
-            return self.sock.read(n)    # pylint: disable=no-member
+            return self.sock.read(size)    # pylint: disable=no-member
         else:
             raise ValueError("I don't know how to read from this stream!")
+
+    def _recv_predicate(self, predicate, timeout='default', raise_eof=True):
+        """
+        Receive until predicate returns a positive integer.
+        The returned number is the size to return.
+        """
+
+        if timeout == 'default':
+            timeout = self._timeout
+
+        self.timed_out = False
+
+        start = time.time()
+        try:
+            while True:
+                cut_at = predicate(self.buf)
+                if cut_at > 0:
+                    break
+                if timeout is not None:
+                    time_elapsed = time.time() - start
+                    if time_elapsed > timeout:
+                        raise socket.timeout
+                    self._settimeout(timeout - time_elapsed)
+
+                data = self._recv(4096)
+                if not data:
+                    if raise_eof:
+                        raise NetcatError("Connection dropped!")
+                    cut_at = len(self.buf)
+                    break
+
+                self._log_recv(data, False)
+
+                self.buf += data
+        except KeyboardInterrupt:
+            self._print_header('\n======== Connection interrupted! ========')
+        except socket.timeout:
+            self.timed_out = True
+            if self._raise_timeout:
+                raise NetcatTimeout()
+            return b''
+        except socket.error as exc:
+            raise NetcatError('Socket error: %r' % exc)
+
+        self._settimeout(self._timeout)
+
+        ret = self.buf[:cut_at]
+        self.buf = self.buf[cut_at:]
+        self._log_recv(ret, True)
+        return ret
 
     def _settimeout(self, timeout):
         """
@@ -527,47 +589,11 @@ class Netcat(object):
 
         Aliases: read, get
         """
-        self.timed_out = False
 
-        if self.verbose and self.echo_headers:
-            if timeout:
-                print('======== Receiving {0}B or until timeout ({1}) ========'.format(n, timeout))
-            else:
-                print('======== Receiving {0}B ========'.format(n))
+        self._print_recv_header(
+            '======== Receiving {0}B{timeout_text} ========', timeout, n)
 
-        ret = b''
-        if self.buf:
-            ret = self.buf[:n]
-            self.buf = self.buf[n:]
-            self._log_recv(ret, True)
-            return ret
-
-        try:
-            if timeout != 'default':
-                self._settimeout(timeout)
-
-            a = self._recv(n - len(self.buf))
-            if a == b'':
-                raise NetcatError("Connection dropped!")
-            self._log_recv(a, False)
-
-            self.buf += a
-            ret = self.buf
-            self.buf = b''
-        except socket.timeout:
-            self.timed_out = True
-            if self._raise_timeout:
-                raise NetcatTimeout()
-        except socket.error as e:
-            raise NetcatError('Socket error: %r' % e)
-
-        self._settimeout(self._timeout)
-
-        if not timeout and ret == b'':
-            raise NetcatError("Connection dropped!")
-
-        self._log_recv(ret, True)
-        return ret
+        return self._recv_predicate(lambda s: min(n, len(s)), timeout)
 
     def recv_until(self, s, max_size=None, timeout='default'):
         """
@@ -577,49 +603,19 @@ class Netcat(object):
 
         Aliases: read_until, readuntil, recvuntil
         """
-        self.timed_out = False
-        if timeout == 'default':
-            timeout = self._timeout
 
-        if self.verbose and self.echo_headers:
-            if timeout:
-                print('======== Receiving until {0} or timeout ({1}) ========'
-                        .format(repr(s), timeout))
-            else:
-                print('======== Receiving until {0} ========'
-                        .format(repr(s)))
+        self._print_recv_header(
+            '======== Receiving until {0}{timeout_text} ========', timeout, repr(s))
 
-        start = time.time()
-        try:
-            while s not in self.buf \
-                    and (max_size is None or len(self.buf) < max_size):
-                if timeout is not None:
-                    dt = time.time()-start
-                    if dt > timeout:
-                        self.timed_out = True
-                        break
-                    self._settimeout(timeout-dt)
+        if max_size is None:
+            max_size = 2 ** 62
 
-                a = self._recv(4096)
-                if a == b'':
-                    raise NetcatError("Connection dropped!")
-                self._log_recv(a, False)
-
-                self.buf += a
-        except socket.timeout:
-            self.timed_out = True
-            if self._raise_timeout:
-                raise NetcatTimeout()
-
-        self._settimeout(self._timeout)
-
-        cut_at = self.buf.index(s)+len(s)
-        if max_size is not None:
-            cut_at = min(cut_at, max_size)
-
-        ret = self._head_buf(cut_at if not self.timed_out else None)
-        self._log_recv(ret, True)
-        return ret
+        def _predicate(buf):
+            try:
+                return min(buf.index(s) + len(s), max_size)
+            except ValueError:
+                return 0 if len(buf) < max_size else max_size
+        return self._recv_predicate(_predicate, timeout)
 
     def recv_all(self, timeout='default'):
         """
@@ -627,48 +623,10 @@ class Netcat(object):
 
         Aliases: read_all, readall, recvall
         """
-        self.timed_out = False
-        if timeout == 'default':
-            timeout = self._timeout
 
-        if self.verbose and self.echo_headers:
-            if timeout:
-                print('======== Receiving until close or timeout ({}) ========'
-                        .format(timeout))
-            else:
-                print('======== Receiving until close ========')
+        self._print_recv_header('======== Receiving until close{timeout_text} ========', timeout)
 
-        start = time.time()
-        try:
-            while True:
-                if timeout is not None:
-                    dt = time.time()-start
-                    if dt > timeout:
-                        self.timed_out = True
-                        break
-                    self._settimeout(timeout-dt)
-
-                a = self._recv(4096)
-                if not a: break
-                self.buf += a
-                self._log_recv(a, False)
-
-        except KeyboardInterrupt:
-            if self.verbose and self.echo_headers:
-                print('\n======== Connection interrupted! ========')
-        except socket.timeout:
-            self.timed_out = True
-            if self._raise_timeout:
-                raise NetcatTimeout()
-        except (socket.error, NetcatError):
-            if self.verbose and self.echo_headers:
-                print('\n======== Connection dropped! ========')
-
-        self._settimeout(self._timeout)
-        ret = self.buf
-        self.buf = b''
-        self._log_recv(ret, True)
-        return ret
+        return self._recv_predicate(lambda s: 0, timeout, raise_eof=False)
 
     def recv_exactly(self, n, timeout='default'):
         """
@@ -676,48 +634,11 @@ class Netcat(object):
 
         Aliases: read_exactly, readexactly, recvexactly
         """
-        self.timed_out = False
-        if timeout == 'default':
-            timeout = self._timeout
 
-        if self.verbose and self.echo_headers:
-            if timeout:
-                print('======== Receiving until exactly {0}B or timeout({1})  ========'
-                        .format(n, timeout))
-            else:
-                print('======== Receiving until exactly {0}B  ========'
-                        .format(n))
+        self._print_recv_header(
+            '======== Receiving until exactly {0}B{timeout_text} ========', timeout, n)
 
-        start = time.time()
-        try:
-            while len(self.buf) < n:
-                if timeout is not None:
-                    dt = time.time()-start
-                    if dt > timeout:
-                        self.timed_out = True
-                        break
-                    self._settimeout(timeout-dt)
-
-                a = self._recv(n - len(self.buf))
-                if len(a) == 0:
-                    raise NetcatError("Connection closed before {0} bytes received!"
-                            .format(n))
-                self.buf += a
-                self._log_recv(a, False)
-        except KeyboardInterrupt:
-            if self.verbose and self.echo_headers:
-                print('\n======== Connection interrupted! ========')
-        except socket.timeout:
-            self.timed_out = True
-            if self._raise_timeout:
-                raise NetcatTimeout()
-        except socket.error as e:
-            raise NetcatError("Socket error: %r" % e)
-
-        out = self.buf[:n]
-        self.buf = self.buf[n:]
-        self._log_recv(out, True)
-        return out
+        return self._recv_predicate(lambda s: n if len(s) >= n else 0, timeout)
 
     def send(self, s):
         """
@@ -725,8 +646,7 @@ class Netcat(object):
 
         Aliases: write, put, sendall, send_all
         """
-        if self.verbose and self.echo_headers:
-            print('======== Sending ({0}) ========'.format(len(s)))
+        self._print_header('======== Sending ({0}) ========'.format(len(s)))
 
         self._log_send(s)
 
@@ -742,8 +662,7 @@ class Netcat(object):
 
         Aliases: interactive, interaction
         """
-        if self.verbose and self.echo_headers:
-            print('======== Beginning interactive session ========')
+        self._print_header('======== Beginning interactive session ========')
 
         if hasattr(outsock, 'buffer'):
             outsock = outsock.buffer    # pylint: disable=no-member
@@ -757,33 +676,29 @@ class Netcat(object):
                 outsock.write(self.buf)
                 outsock.flush()
                 self.buf = b''
-            dropped = False
-            while not dropped:
-                r, _, _ = _select.select([self.sock, insock], [], [])
-                for s in r:
-                    if s == self.sock:
-                        a = self.recv(timeout=None)
-                        if a == b'':
-                            dropped = True
-                        else:
-                            outsock.write(a)
-                            outsock.flush()
-                    else:
-                        b = os.read(insock.fileno(), 4096)
-                        self.send(b)
-            raise NetcatError("Connection dropped!")
+
+            while True:
+                readable_socks, _, _ = select.select([self.sock, insock], [], [])
+                if self.sock in readable_socks:
+                    data = self.recv(timeout=None)
+                    if not data:
+                        raise NetcatError
+                    outsock.write(data)
+                    outsock.flush()
+                if insock in readable_socks:
+                    self.send(os.read(insock.fileno(), 4096))
         except KeyboardInterrupt:
-            if save_verbose and self.echo_headers:
-                print('\n======== Connection interrupted! ========')
+            self.verbose = save_verbose
+            self._print_header('\n======== Connection interrupted! ========')
         except (socket.error, NetcatError):
-            if save_verbose and self.echo_headers:
-                print('\n======== Connection dropped! ========')
+            self.verbose = save_verbose
+            self._print_header('\n======== Connection dropped! ========')
         finally:
             self.verbose = save_verbose
 
     LINE_ENDING = b'\n'
 
-    def recv_line(self, max_size=None, timeout=None, ending=None):
+    def recv_line(self, max_size=None, timeout='default', ending=None):
         """
         Recieve until the next newline , default "\\n". The newline string can
         be changed by changing ``nc.LINE_ENDING``. The newline will be returned
@@ -791,7 +706,8 @@ class Netcat(object):
 
         Aliases: recvline, readline, read_line, readln, recvln
         """
-        if ending is None: ending = self.LINE_ENDING
+        if ending is None:
+            ending = self.LINE_ENDING
         return self.recv_until(ending, max_size, timeout)
 
     def send_line(self, line, ending=None):
@@ -801,7 +717,8 @@ class Netcat(object):
 
         Aliases: sendline, writeline, write_line, writeln, sendln
         """
-        if ending is None: ending = self.LINE_ENDING
+        if ending is None:
+            ending = self.LINE_ENDING
         return self.send(line + ending)
 
     read = recv
