@@ -196,7 +196,7 @@ class Netcat(object):
             self._connect(target, listen, udp, ipv6, retry)
         else:
             self.sock = sock
-            self.peer = target
+            self.peer = connect
 
         try:
             self._timeout = self.sock.gettimeout()
