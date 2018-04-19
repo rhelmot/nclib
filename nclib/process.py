@@ -95,7 +95,7 @@ class Process(Netcat):
             err = None # redirect to console
 
         p = subprocess.Popen(program,
-                shell=type(program) in (str, bytes, unicode),
+                shell=type(program) not in (list, tuple),
                 stdin=sock, stdout=sock, stderr=err,
                 cwd=cwd, env=env,
                 close_fds=True)
@@ -127,7 +127,7 @@ class GDBProcess(Process):
         """
         super(GDBProcess, self).__init__(program, **kwargs)
 
-        progbase = (program.split() if type(program) in (str, bytes, unicode) else program)[0]
+        progbase = (program.split() if type(program) not in (list, tuple) else program)[0]
         gdbcmd = 'gdb %s -ex "set sysroot" -ex "target remote tcp::%d"' % (progbase, self._subprocess._gdbport) # pylint: disable=no-member
         if gdbscript is not None:
             gdbcmd += " -x '%s'" % (gdbscript.replace("'", "'\"'\"'"))
@@ -146,7 +146,7 @@ class GDBProcess(Process):
     def launch(cls, program, *args, **kwargs):
         gdbport = random.randint(32768, 60999) # default /proc/sys/net/ipv4/ip_local_port_range on my machine
         gdbcmd = ['gdbserver', 'localhost:%d' % gdbport]
-        if type(program) in (str, bytes, unicode):
+        if type(program) not in (list, tuple):
             program = '%s %s' % (' '.join(gdbcmd), program)
         else:
             program = gdbcmd + program
