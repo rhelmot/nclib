@@ -128,6 +128,10 @@ class GDBProcess(Process):
         super(GDBProcess, self).__init__(program, **kwargs)
 
         progbase = (program.split() if type(program) not in (list, tuple) else program)[0]
+        # TODO: this should be refactored so it's the other way around
+        # we should be fromatting stuff into bytestrings since that's what goes into the syscalls
+        if bytes is not str and type(progbase) is bytes:
+            progbase = progbase.decode()
         gdbcmd = 'gdb %s -ex "set sysroot" -ex "target remote tcp::%d"' % (progbase, self._subprocess._gdbport) # pylint: disable=no-member
         if gdbscript is not None:
             gdbcmd += " -x '%s'" % (gdbscript.replace("'", "'\"'\"'"))
@@ -147,6 +151,8 @@ class GDBProcess(Process):
         gdbport = random.randint(32768, 60999) # default /proc/sys/net/ipv4/ip_local_port_range on my machine
         gdbcmd = ['gdbserver', 'localhost:%d' % gdbport]
         if type(program) not in (list, tuple):
+            if bytes is not str and type(program) is bytes:
+                program = program.decode()
             program = '%s %s' % (' '.join(gdbcmd), program)
         else:
             program = gdbcmd + program
