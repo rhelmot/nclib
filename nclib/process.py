@@ -137,7 +137,7 @@ class GDBProcess(Process):
                 close_fds=True,
                 stdin=nul, stdout=nul, stderr=nul)
 
-        self.recv_until('pid = ')
+        self.recv_until(b'pid = ')
         self.pid = int(self.recvline())
         self.recvline()
         self.recvline()
