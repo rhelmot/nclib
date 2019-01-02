@@ -29,14 +29,14 @@ pwntools' socket wrappers do, but with the bonus feature of not being pwntools.
 
 from setuptools import setup
 setup(name='nclib',
-      version='0.8.2',
+      version='0.8.2.post1',
       packages=['nclib'],
       scripts=['serve-stdio'],
       description='Netcat as a library: convienent socket interfaces',
       long_description=long_description,
       url='https://github.com/rhelmot/nclib',
       author='rhelmot',
-      author_email='andrewrdutcher@gmail.com',
+      author_email='audrey@rhelmot.io',
       license='MIT',
       keywords='netcat nc socket tcp udp recv until logging interact handle listen connect serve stdio process gdb'
       )
