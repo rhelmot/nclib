@@ -28,7 +28,9 @@ pwntools' socket wrappers do, but with the bonus feature of not being pwntools.
 Installation
 ------------
 
-`pip install nclib`
+.. code-block:: bash
+
+    pip install nclib
 
 Documentation
 -------------
