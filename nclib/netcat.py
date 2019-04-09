@@ -134,6 +134,7 @@ class Netcat(object):
                  sock=None,
                  listen=None,
                  server=None,
+                 sock_send=None,
                  udp=False,
                  ipv6=False,
                  verbose=0,
@@ -157,6 +158,7 @@ class Netcat(object):
         self.echo_recv_prefix = '<< '
 
         self.sock = None
+        self._sock_send = sock_send
         self.peer = None
 
         # case: Netcat(host, port)
@@ -204,6 +206,17 @@ class Netcat(object):
             self._timeout = None
         self.timed_out = False  # set when an operation times out
         self._raise_timeout = raise_timeout
+
+    @property
+    def sock_send(self):
+        if self._sock_send is None:
+            return self.sock
+        else:
+            return self._sock_send
+
+    @sock_send.setter
+    def sock_send(self, val):
+        self._sock_send = val
 
     @staticmethod
     def _parse_target(target, listen, udp, ipv6):
@@ -380,6 +393,8 @@ class Netcat(object):
         """
         Close the socket.
         """
+        if self._sock_send is not None:
+            self._sock_send.close()
         return self.sock.close()
 
     def shutdown(self, how=socket.SHUT_RDWR):
@@ -397,6 +412,8 @@ class Netcat(object):
 
         http://stackoverflow.com/questions/409783/socket-shutdown-vs-socket-close
         """
+        if self._sock_send is not None:
+            self._sock_send.shutdown(how)
         return self.sock.shutdown(how)
 
     def shutdown_rd(self):
@@ -417,6 +434,8 @@ class Netcat(object):
         """
         Return the file descriptor associated with this socket
         """
+        if self._sock_send is not None:
+            raise UserWarning("Calling fileno when there are in fact two filenos")
         return self.sock.fileno()
 
     def _print_verbose(self, s):
@@ -502,10 +521,10 @@ class Netcat(object):
         self._settimeout(timeout)
 
     def _send(self, data):
-        if hasattr(self.sock, 'send'):
-            return self.sock.send(data)
-        elif hasattr(self.sock, 'write'):
-            return self.sock.write(data) # pylint: disable=no-member
+        if hasattr(self.sock_send, 'send'):
+            return self.sock_send.send(data)
+        elif hasattr(self.sock_send, 'write'):
+            return self.sock_send.write(data) # pylint: disable=no-member
         else:
             raise ValueError("I don't know how to write to this stream!")
 
