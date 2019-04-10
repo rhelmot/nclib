@@ -421,14 +421,20 @@ class Netcat(object):
         Send a shutdown signal for reading - you may no longer read from this
         socket.
         """
-        return self.shutdown(socket.SHUT_RD)
+        if self._sock_send is not None:
+            self.sock.close()
+        else:
+            return self.shutdown(socket.SHUT_RD)
 
     def shutdown_wr(self):
         """
         Send a shutdown signal for writing - you may no longer write to this
         socket.
         """
-        return self.shutdown(socket.SHUT_WR)
+        if self._sock_send is not None:
+            self._sock_send.close()
+        else:
+            return self.shutdown(socket.SHUT_WR)
 
     def fileno(self):
         """
