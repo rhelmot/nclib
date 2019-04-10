@@ -64,9 +64,10 @@ class Netcat(object):
                         This should be specified as a python socket or pipe
                         object.
 
-    .. warning:: Using ``sock_send`` will cause issues if you pass this object
-                 into a context which expects to be able to use its
-                 ``.fileno()``.
+                        .. warning:: Using ``sock_send`` will cause issues if
+                                     you pass this object into a context which
+                                     expects to be able to use its
+                                     ``.fileno()``.
 
     :param udp:         Set to True to use udp connections when using the
                         connect or listen parameters
