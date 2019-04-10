@@ -50,13 +50,23 @@ class Netcat(object):
 
     :param connect:     the address/port to connect to
     :param listen:      the address/port to bind to for listening
-    :param sock:        a python socket object to wrap
+    :param sock:        a python socket or pipe object to wrap
 
     For ``connect`` and ``listen``, they accept basically any argument format
     known to mankind. If you find an input format you think would be useful but
     isn't accepted, let me know :P
 
     Additionally, the following options modify the behavior of the object:
+
+    :param sock_send:   If this is specified, this Netcat object will act
+                        as a multiplexer/demultiplexer, using the "normal"
+                        channel for receiving and this channel for sending.
+                        This should be specified as a python socket or pipe
+                        object.
+
+    .. warning:: Using ``sock_send`` will cause issues if you pass this object
+                 into a context which expects to be able to use its
+                 ``.fileno()``.
 
     :param udp:         Set to True to use udp connections when using the
                         connect or listen parameters
@@ -67,7 +77,7 @@ class Netcat(object):
                         describe exactly what you want logged.
     :param log_send:    Pass a file-like object open for writing and all
                         data sent over the socket will be written to it.
-    :param log_send:    Pass a file-like object open for writing and all
+    :param log_recv:    Pass a file-like object open for writing and all
                         data recieved from the socket will be written to it.
     :param raise_timeout:
                         Whether to raise a NetcatTimeout exception when a
