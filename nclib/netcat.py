@@ -407,6 +407,20 @@ class Netcat(object):
             self._sock_send.close()
         return self.sock.close()
 
+    # inconsistent between sockets and files. support both
+    @property
+    def closed(self):
+        return self._closed
+
+    @property
+    def _closed(self):
+        if hasattr(self.sock_send, 'closed'):
+            return self.sock_send.closed
+        elif hasattr(self.sock_send, '_closed'):
+            return self.sock_send._closed
+        else:
+            return False  # ???
+
     def shutdown(self, how=socket.SHUT_RDWR):
         """
         Send a shutdown signal for both reading and writing, or whatever
