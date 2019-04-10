@@ -29,7 +29,7 @@ pwntools' socket wrappers do, but with the bonus feature of not being pwntools.
 
 from setuptools import setup
 setup(name='nclib',
-      version='0.8.2.post1',
+      version='0.8.3',
       packages=['nclib'],
       scripts=['serve-stdio'],
       description='Netcat as a library: convienent socket interfaces',
