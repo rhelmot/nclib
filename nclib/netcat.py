@@ -1,7 +1,6 @@
 import getopt
 import os
 import re
-import select
 import socket
 import sys
 import time
@@ -577,17 +576,18 @@ class Netcat(object):
                     self._settimeout(timeout - time_elapsed)
 
                 data = self._recv(4096)
+                self._log_recv(data, False)
+                self.buf += data
+
                 if not data:
                     if raise_eof:
                         raise NetcatError("Connection dropped!")
                     cut_at = len(self.buf)
                     break
 
-                self._log_recv(data, False)
-
-                self.buf += data
         except KeyboardInterrupt:
             self._print_header('\n======== Connection interrupted! ========')
+            raise
         except socket.timeout:
             self.timed_out = True
             if self._raise_timeout:
@@ -618,6 +618,10 @@ class Netcat(object):
         Retrieve the timeout currently associated with the socket
         """
         return self._timeout
+
+    def flush(self):
+        # no buffering
+        pass
 
     def recv(self, n=4096, timeout='default'):
         """
@@ -685,9 +689,11 @@ class Netcat(object):
         self._print_header('======== Sending ({0}) ========'.format(len(s)))
 
         self._log_send(s)
+        out = len(s)
 
         while s:
             s = s[self._send(s):]
+        return out
 
     def interact(self, insock=sys.stdin, outsock=sys.stdout):
         """
@@ -714,18 +720,23 @@ class Netcat(object):
                 self.buf = b''
 
             while True:
-                readable_socks, _, _ = select.select([self.sock, insock], [], [])
-                if self.sock in readable_socks:
-                    data = self.recv(timeout=None)
-                    if not data:
-                        raise NetcatError
-                    outsock.write(data)
-                    outsock.flush()
-                if insock in readable_socks:
-                    self.send(os.read(insock.fileno(), 4096))
+                readable_socks = select(self.sock, insock)
+                for readable in readable_socks:
+                    if readable is insock:
+                        data = os.read(insock.fileno(), 4096)
+                        self.send(data)
+                        if not data:
+                            raise NetcatError
+                    else:
+                        data = self.recv(timeout=None)
+                        outsock.write(data)
+                        outsock.flush()
+                        if not data:
+                            raise NetcatError
         except KeyboardInterrupt:
             self.verbose = save_verbose
             self._print_header('\n======== Connection interrupted! ========')
+            raise
         except (socket.error, NetcatError):
             self.verbose = save_verbose
             self._print_header('\n======== Connection dropped! ========')
@@ -792,6 +803,7 @@ class Netcat(object):
     writeln = send_line
     sendln = send_line
 
+from .selects import select
 
 # congrats, you've found the secret in-progress command-line python netcat! it barely works.
 #def add_arg(arg, options, args):
