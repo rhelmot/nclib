@@ -40,10 +40,10 @@ class Process(Netcat):
     >>> from nclib import Process
     >>> cat = Process('cat')
     >>> cat.send('Hello world!')
-    >>> print cat.recv()
-    Hello world!
+    >>> print(cat.recv())
+    b'Hello world!'
     >>> cat.close()
-    >>> print cat.poll()
+    >>> print(cat.poll())
     0
     """
     def __init__(self, program,
