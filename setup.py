@@ -4,6 +4,7 @@ nclib is a python socket library that wants to be your friend.
 nclib provides:
 
 - Easy-to-use interfaces for connecting to and listening on TCP and UDP sockets
+- The ability to handle any python stream-like object with a single interface
 - A better socket class, the Netcat object
 
   - Convenient receive methods for common socket usage patterns
@@ -27,9 +28,13 @@ If you are familiar with pwntools, nclib provides much of the functionaly that
 pwntools' socket wrappers do, but with the bonus feature of not being pwntools.
 '''
 
+if bytes is str:
+  raise Exception("nclib is python 3 only now :(")
+
 from setuptools import setup
 setup(name='nclib',
-      version='0.8.4rc2',
+      version='1.0.0.rc1',
+      python_requires='>=3.5',
       packages=['nclib'],
       scripts=['serve-stdio'],
       description='Netcat as a library: convienent socket interfaces',
@@ -38,5 +43,5 @@ setup(name='nclib',
       author='rhelmot',
       author_email='audrey@rhelmot.io',
       license='MIT',
-      keywords='netcat nc socket tcp udp recv until logging interact handle listen connect serve stdio process gdb'
+      keywords='netcat nc socket sock file pipe tcp udp recv until logging interact handle listen connect server serve stdio process gdb'
       )

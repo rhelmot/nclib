@@ -5,3 +5,6 @@ class NetcatError(Exception):
 
 class NetcatTimeout(NetcatError, socket.timeout):
     pass
+
+class NetcatEOF(NetcatError):
+    pass

@@ -2,7 +2,7 @@ import socket
 
 from . import Netcat
 
-class TCPServer(object):
+class TCPServer:
     """
     A simple TCP server model. Iterating over it will yield client sockets as
     Netcat objects.
@@ -42,7 +42,7 @@ class TCPServer(object):
         return self.sock.close()
 
 
-class UDPServer(object):
+class UDPServer:
     """
     A simple UDP server model. Iterating over it will yield of tuples of
     datagrams and peer addresses. To respond, use the respond method, which

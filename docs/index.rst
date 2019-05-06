@@ -6,6 +6,7 @@ nclib is a python socket library that wants to be your friend.
 nclib provides:
 
 - Easy-to-use interfaces for connecting to and listening on TCP and UDP sockets
+- The ability to handle any python stream-like object with a single interface
 - A better socket class, the Netcat object
 
   - Convenient receive methods for common socket usage patterns
@@ -36,6 +37,8 @@ To install nclib, run ``pip install nclib``.
    netcat
    server
    process
+   logger
+   simplesock
    serve-stdio
 
 

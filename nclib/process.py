@@ -1,5 +1,4 @@
 import subprocess
-import socket
 import os
 import random
 
@@ -24,8 +23,6 @@ class Process(Netcat):
     :param cwd:         The working directory to execute the program in
     :param env:         The environment to execute the program in, as a
                         dictionary
-    :param protocol:    The socket protocol to use. 'tcp' by default, can also
-                        be 'udp'
 
     Any additional keyword arguments will be passed to the constructor of
     Netcat.
@@ -40,22 +37,24 @@ class Process(Netcat):
     >>> from nclib import Process
     >>> cat = Process('cat')
     >>> cat.send('Hello world!')
-    >>> print cat.recv()
-    Hello world!
+    >>> print(cat.recv())
+    b'Hello world!'
     >>> cat.close()
-    >>> print cat.poll()
+    >>> print(cat.poll())
     0
     """
     def __init__(self, program,
-            protocol='tcp',
             stderr=True,
             cwd=None,
             env=None,
             **kwargs):
-        x, y = socket.socketpair(socket.AF_UNIX, socket.SOCK_STREAM if protocol == 'tcp' else socket.SOCK_DGRAM)
-        self._subprocess = self.launch(program, y, stderr=stderr, cwd=cwd, env=env)
+        self._subprocess = self.launch(program, stderr=stderr, cwd=cwd, env=env)
         self.pid = self._subprocess.pid
-        super(Process, self).__init__(sock=x, server='local program %s' % program, **kwargs)
+
+        super().__init__(
+                sock=self._subprocess.stdout,
+                sock_send=self._subprocess.stdin,
+                server='local program %s' % program, **kwargs)
 
     def poll(self):
         """
@@ -82,26 +81,27 @@ class Process(Netcat):
         return self._subprocess.kill()
 
     @staticmethod
-    def launch(program, sock, stderr=True, cwd=None, env=None):
+    def launch(program, sock=None, stderr=True, cwd=None, env=None):
         """
-        A static method for launching a process that is connected to a given
-        socket. Same rules from the Process constructor apply.
-        """
-        if stderr is True:
-            err = sock # redirect to socket
-        elif stderr is False:
-            err = open(os.devnull, 'wb') # hide
-        elif stderr is None:
-            err = None # redirect to console
+        A static method for launching a process.
+        Same rules from the Process constructor apply.
 
-        p = subprocess.Popen(program,
+        :param sock:    The socket to use for stdin/stdout. If None, will be a new set of pipes.
+        """
+
+        if stderr is True:
+            stderr = subprocess.STDOUT
+        elif stderr is False:
+            stderr = subprocess.DEVNULL
+
+        if sock is None:
+            sock = subprocess.PIPE
+
+        return subprocess.Popen(program,
                 shell=type(program) not in (list, tuple),
-                stdin=sock, stdout=sock, stderr=err,
+                stdin=sock, stdout=sock, stderr=stderr,
                 cwd=cwd, env=env,
                 close_fds=True)
-
-        sock.close()
-        return p
 
 
 class GDBProcess(Process):
