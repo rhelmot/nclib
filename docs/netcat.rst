@@ -6,6 +6,7 @@ Basic socket interfaces
 .. autoclass:: nclib.netcat.Netcat
    :members: __init__, send, send_line, recv, recv_until, recv_all, recv_exactly, interact, close, closed, shutdown, shutdown_rd, shutdown_wr, fileno, settimeout, gettimeout
 
+.. autofunction:: nclib.select.merge
 .. autofunction:: nclib.select.select
 .. autofunction:: nclib.netcat.ferry
 

@@ -171,7 +171,7 @@ class Netcat:
             loggers = []
         if verbose:
             l = logger.StandardLogger(
-                    simplesock.wrap(sys.stderr),
+                    _xwrap(sys.stderr),
                     log_yield=log_yield,
                     show_headers=echo_headers,
                     hex_dump=echo_hex,
@@ -181,8 +181,8 @@ class Netcat:
             loggers.append(l)
         if log_send is not None or log_recv is not None:
             l = logger.TeeLogger(
-                    log_send=simplesock.wrap(log_send),
-                    log_recv=simplesock.wrap(log_recv),
+                    log_send=_xwrap(log_send),
+                    log_recv=_xwrap(log_recv),
                     log_yield=log_yield)
             loggers.append(l)
 
@@ -241,9 +241,9 @@ class Netcat:
             self._timeout = None
 
         # do simplesock wrapping and take sock_send into account
-        self.sock = simplesock.wrap(self.sock)
+        self.sock = _xwrap(self.sock)
         if sock_send is not None:
-            self.sock = simplesock.SimpleDuplex(self.sock, simplesock.wrap(sock_send))
+            self.sock = simplesock.SimpleDuplex(self.sock, _xwrap(sock_send))
 
     @staticmethod
     def _parse_target(target, listen, udp, ipv6):
@@ -685,7 +685,7 @@ class Netcat:
         Aliases: interactive, interaction
         """
         self.logger.interact_starting()
-        other = Netcat(simplesock.SimpleDuplex(simplesock.wrap(insock), simplesock.wrap(outsock)))
+        other = Netcat(simplesock.SimpleDuplex(_xwrap(insock), _xwrap(outsock)))
         ferry(self, other, suppress_timeout=True, suppress_raise_eof=True)
         self.logger.interact_ending()
 
@@ -757,6 +757,28 @@ class Netcat:
     write_line = send_line
     writeln = send_line
     sendln = send_line
+
+def merge(children, **kwargs):
+    """
+    Return a Netcat object which whose receives will be the merged stream of
+    all the given children sockets.
+
+    :param children:    A list of socks of any kind to receive from
+    :param kwargs:      Any additional keyword arguments will be passed on to
+                        the Netcat constructor. Notably, you might want to
+                        specify `sock_send`, since by default you will not
+                        be able to send data to a merged socket.
+    """
+    nice_children = [_xrap(child) for child in children]
+    return Netcat(simplesock.SimpleMerge(nice_children), **kwargs)
+
+def _xwrap(sock):
+    """
+    like simplesock.wrap but will also *unwrap* Netcat objects into their
+    constituent sockets. be warned that this will discard buffers
+    """
+    return child.sock if isinstance(child, Netcat) else simplesock.wrap(child)
+
 
 def ferry(left, right, ferry_left=True, ferry_right=True,
         suppress_timeout=True, suppress_raise_eof=False):
