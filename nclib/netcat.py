@@ -71,8 +71,8 @@ class Netcat:
                         connect or listen parameters
     :param ipv6:        Force using ipv6 when using the connect or listen
                         parameters
-    :param retry:       Whether to continuously retry establishing a
-                        connection if it fails.
+    :param retry:       The number of times to retry establishing a connection
+                        after a short (200ms) sleep if it fails.
     :param raise_timeout:
                         Whether to raise a `NetcatTimeout` exception when a
                         timeout is received. The default is to return any
@@ -156,7 +156,7 @@ class Netcat:
                  sock_send=None, server=None,
                  udp=False, ipv6=False,
                  raise_timeout=False, raise_eof=False,
-                 retry=False,
+                 retry=0,
                  loggers=None,
 
                  # canned options
@@ -229,7 +229,7 @@ class Netcat:
                 listen = False
 
             target, listen, udp, ipv6 = self._parse_target(target, listen, udp, ipv6)
-            self._connect(target, listen, udp, ipv6, retry)
+            self._connect(target, listen, udp, ipv6, int(retry))
         else:
             self.sock = sock
             self.peer = connect
@@ -398,7 +398,7 @@ class Netcat:
                 self.sock.connect(self.peer)
                 self.logger.buffering(self.buf)
         else:
-            while True:
+            while retry >= 0:
                 try:
                     self.sock.connect(target)
                 except (socket.gaierror, socket.herror) as exc:
@@ -407,6 +407,7 @@ class Netcat:
                 except socket.error as exc:
                     if retry:
                         time.sleep(0.2)
+                        retry -= 1
                     else:
                         raise errors.NetcatError('Could not connect to %r: %r' \
                                 % (target, exc))
