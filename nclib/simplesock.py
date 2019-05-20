@@ -172,10 +172,12 @@ class SimpleFile(Simple):
     def shutdown(self, how):
         if how == socket.SHUT_RDWR:
             self.close()
-        elif how == socket.SHUT_RD and not self.can_send:
-            self.close()
-        elif how == socket.SHUT_WR and not self.can_recv:
-            self.close()
+        elif how == socket.SHUT_RD:
+            if not self.can_send:
+                self.close()
+        elif how == socket.SHUT_WR:
+            if not self.can_recv:
+                self.close()
         else:
             raise ValueError("invalid shutdown `how`", how)
 
@@ -264,6 +266,7 @@ class SimpleMerge(Simple):
     def __init__(self, children):
         super().__init__()
         self.can_send = False
+        self.can_recv = True
         self.children = children
 
         if any(not child.can_recv for child in children):
@@ -356,6 +359,7 @@ class SimpleLogger(Simple):
         self._closed = False
 
         self.can_recv = False
+        self.can_send = True
 
     def recv(self, size):
         raise NetcatError("Can't recv from a logger object")
