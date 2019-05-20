@@ -351,7 +351,7 @@ class SimpleLogger(Simple):
     def __init__(self, logger='nclib.logs', level='INFO', encoding=None):
         super().__init__()
         self.logger = logging.getLogger(logger)
-        self.level = level
+        self.level = logging._checkLevel(level)
         self.encoding = encoding
         self._closed = False
 
