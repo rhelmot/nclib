@@ -23,11 +23,7 @@ KNOWN_SCHEMES = {
     'smtp': (False, None, 25),
 }
 
-if str is not bytes: # py3
-    long = int # pylint: disable=redefined-builtin,invalid-name
-    from urllib.parse import urlparse # pylint: disable=no-name-in-module,import-error
-else:
-    from urlparse import urlparse # pylint: disable=import-error
+from urllib.parse import urlparse
 
 def _is_ipv6_addr(addr):
     try:
@@ -361,7 +357,7 @@ class Netcat:
 
                 return (addr, port), listen, udp, ipv6
 
-        elif isinstance(target, (int, long)):
+        elif isinstance(target, int):
             if listen:
                 out_port = target
             else:
@@ -416,17 +412,17 @@ class Netcat:
             self.peer = target
         self.logger.connected(self.peer)
 
-    def add_logger(self, logger):
+    def add_logger(self, l):
         """
         Add the given logger to the list of current loggers
         """
-        self.logger.children.append(logger)
+        self.logger.children.append(l)
 
-    def remove_logger(self, logger):
+    def remove_logger(self, l):
         """
         Remove the given logger from the list of current loggers
         """
-        self.logger.children.remove(logger)
+        self.logger.children.remove(l)
 
     #
     # Socket metadata functionality
@@ -782,7 +778,7 @@ def merge(children, **kwargs):
                         specify `sock_send`, since by default you will not
                         be able to send data to a merged socket.
     """
-    nice_children = [_xrap(child) for child in children]
+    nice_children = [_xwrap(child) for child in children]
     return Netcat(simplesock.SimpleMerge(nice_children), **kwargs)
 
 def _xwrap(sock):
