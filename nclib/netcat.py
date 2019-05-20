@@ -790,7 +790,7 @@ def _xwrap(sock):
     like simplesock.wrap but will also *unwrap* Netcat objects into their
     constituent sockets. be warned that this will discard buffers
     """
-    return child.sock if isinstance(child, Netcat) else simplesock.wrap(child)
+    return sock.sock if isinstance(sock, Netcat) else simplesock.wrap(sock)
 
 
 def ferry(left, right, ferry_left=True, ferry_right=True,
