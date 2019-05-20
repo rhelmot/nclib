@@ -416,6 +416,18 @@ class Netcat:
             self.peer = target
         self.logger.connected(self.peer)
 
+    def add_logger(self, logger):
+        """
+        Add the given logger to the list of current loggers
+        """
+        self.logger.children.append(logger)
+
+    def remove_logger(self, logger):
+        """
+        Remove the given logger from the list of current loggers
+        """
+        self.logger.children.remove(logger)
+
     #
     # Socket metadata functionality
     #
