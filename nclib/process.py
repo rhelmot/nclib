@@ -106,7 +106,7 @@ class Process(Netcat):
 
 class GDBProcess(Process):
     """
-    Like nclib.Process, but also launches gdb (in a new gnome-terminal window)
+    Like nclib.Process, but also launches gdb (in a new $TERMINAL, by default gnome-terminal)
     to debug the process.
     """
     def __init__(self, program, gdbscript=None, **kwargs):
@@ -137,7 +137,8 @@ class GDBProcess(Process):
             gdbcmd += " -x '%s'" % (gdbscript.replace("'", "'\"'\"'"))
 
         nul = open(os.devnull, 'r+b')
-        self.term = subprocess.Popen(['gnome-terminal', '-e', gdbcmd],
+        t = os.environ.get("TERMINAL", "gnome-terminal").split()
+        self.term = subprocess.Popen(t + ['-e', gdbcmd],
                 close_fds=True,
                 stdin=nul, stdout=nul, stderr=nul)
 
