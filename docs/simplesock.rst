@@ -18,3 +18,5 @@ All Netcat methods should automatically wrap any stream objects you provide with
 .. autoclass:: nclib.simplesock.SimpleFile
 .. autoclass:: nclib.simplesock.SimpleDuplex
 .. autoclass:: nclib.simplesock.SimpleMerge
+.. autoclass:: nclib.simplesock.SimpleNetcat
+.. autoclass:: nclib.simplesock.SimpleLogger

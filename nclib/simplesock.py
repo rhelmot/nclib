@@ -1,5 +1,6 @@
 import socket
 import io
+import logging
 
 from .select import select
 from .errors import NetcatError
@@ -298,3 +299,89 @@ class SimpleMerge(Simple):
     def _prep_select(self):
         stuff = sum((child._prep_select()[0] for child in self.children), ())
         return stuff, (), stuff
+
+class SimpleNetcat(Simple):
+    """
+    A wrapper for a Netcat object! Why? Just in case you want to do
+    Netcat-level instrumentation [logging] at a finer granularity than the
+    top-level.
+
+    :param sock:    A Netcat object.
+    """
+    def __init__(self, nc):
+        super().__init__()
+        self.nc = nc
+        self.can_recv = nc.sock.can_recv
+        self.can_send = nc.sock.can_send
+
+        nc.settimeout(None)
+
+    def recv(self, size):
+        return self.nc.recv(size)
+
+    def send(self, data):
+        return self.nc.send(data)
+
+    def close(self):
+        return self.nc.close()
+
+    @property
+    def closed(self):
+        return self.nc.closed
+
+    def fileno(self):
+        return self.nc.fileno()
+
+    def shutdown(self, how):
+        return self.nc.shutdown(how)
+
+    def _prep_select(self):
+        return self.nc._prep_select()
+
+class SimpleLogger(Simple):
+    """
+    A socket-like interface for dumping data to a python logging endpoint.
+
+    :param logger:      The dotted name for the endpoint for the logs to go to
+    :param level:       The string or numeric severity level for the logging
+                        messages
+    :param encoding:    simplesock objects are fed bytestrings. Loggers consume
+                        unicode strings. How should we translate?
+    """
+    def __init__(self, logger='nclib.logs', level='INFO', encoding=None):
+        super().__init__()
+        self.logger = logging.getLogger(logger)
+        self.level = level
+        self.encoding = encoding
+        self._closed = False
+
+        self.can_recv = False
+
+    def recv(self, size):
+        raise NetcatError("Can't recv from a logger object")
+
+    def send(self, data):
+        if self._closed:
+            raise NetcatError("I'm closed dumbass!")
+
+        if self.encoding is None:
+            data = data.decode()
+        else:
+            data = data.decode(self.encoding)
+        self.logger.log(self.level, data)
+
+    def close(self):
+        self._closed = True
+
+    @property
+    def closed(self):
+        return self._closed
+
+    def fileno(self):
+        raise NetcatError("Can't make a fileno for you")
+
+    def shutdown(self, how):
+        return None
+
+    def _prep_select(self):
+        raise NetcatError("Can't be selected")
