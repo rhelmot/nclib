@@ -78,4 +78,5 @@ signal.signal(signal.SIGINT, cleanup)
 for client in nclib.TCPServer((bind_addr, port)):
     print('Accepted client %s:%d' % client.peer)
     children.append(nclib.Process.launch(command, client, stderr=show_stderr))
+    client.close()
     reap()
