@@ -591,7 +591,7 @@ class Netcat:
             self.timed_out = True
             if self._raise_timeout:
                 raise
-            return b''
+            cut_at = len(self.buf)
 
         # handle arbitrary socket errors. should this be moved inward?
         except socket.error as e:
