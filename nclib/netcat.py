@@ -525,7 +525,10 @@ class Netcat:
             r, _, _ = select.select([self.sock], timeout=timeout)  # pylint: disable=no-member
             if not r:
                 raise errors.NetcatTimeout
-        data = self.sock.recv(size)
+        try:
+            data = self.sock.recv(size)
+        except ConnectionResetError:
+            data = b''
         self.logger.buffering(data)
         return data
 
