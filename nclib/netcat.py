@@ -652,7 +652,8 @@ class Netcat:
 
     def recv_all(self, timeout='default'):
         """
-        Return all data recieved until connection closes.
+        Return all data recieved until connection closes or the timeout
+        elapses.
 
         Aliases: read_all, readall, recvall
         """
@@ -665,7 +666,8 @@ class Netcat:
         """
         Recieve exactly n bytes
 
-        Aliases: read_exactly, readexactly, recvexactly
+        Aliases: read_exactly, readexactly, recvexactly, recv_exact,
+        read_exact, readexact, recvexact
         """
 
         timeout = self._fixup_timeout(timeout)
@@ -723,12 +725,15 @@ class Netcat:
     def send_line(self, line, ending=None):
         """
         Write the string to the wire, followed by a newline. The newline string
-        can be changed by changing ``nc.LINE_ENDING``.
+        can be changed by specifying the ``ending`` param or changing
+        ``nc.LINE_ENDING``.
 
         Aliases: sendline, writeline, write_line, writeln, sendln
         """
         if ending is None:
             ending = self.LINE_ENDING
+        if type(line) is str:
+            line = line.encode()
         return self.send(line + ending)
 
     #
@@ -776,8 +781,8 @@ class Netcat:
 
 def merge(children, **kwargs):
     """
-    Return a Netcat object which whose receives will be the merged stream of
-    all the given children sockets.
+    Return a Netcat object whose receives will be the merged stream of all the
+    given children sockets.
 
     :param children:    A list of socks of any kind to receive from
     :param kwargs:      Any additional keyword arguments will be passed on to
@@ -791,7 +796,7 @@ def merge(children, **kwargs):
 def _xwrap(sock):
     """
     like simplesock.wrap but will also *unwrap* Netcat objects into their
-    constituent sockets. be warned that this will discard buffers
+    constituent sockets. Be warned that this will discard buffers.
     """
     return sock.sock if isinstance(sock, Netcat) else simplesock.wrap(sock)
 
