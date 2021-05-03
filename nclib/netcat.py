@@ -195,8 +195,9 @@ class Netcat:
 
         # handle several "convenient" args-passing cases
         # case: Netcat(host, port)
-        if isinstance(connect, str) and isinstance(listen, int):
-            connect = (connect, listen)
+        if isinstance(connect, str) and isinstance(sock, int):
+            connect = (connect, sock)
+            sock = None
 
         # case: Netcat(sock)
         if hasattr(connect, 'read') or hasattr(connect, 'recv'):
