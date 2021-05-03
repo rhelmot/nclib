@@ -132,6 +132,10 @@ class SimpleFile(Simple):
     def __init__(self, fp):
         super().__init__()
         self.please_decode = None
+        # a common case is to pass Nclib(log_send=open(file)).
+        # this will fail because when we unwrap the object its outer layers are garbage collected
+        # which closes the file.
+        self._no_garbage_collection_thx = fp
 
         try: # check if we have a TextIOWrapper
             buf = fp.buffer
