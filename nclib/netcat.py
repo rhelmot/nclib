@@ -177,8 +177,8 @@ class Netcat:
             loggers.append(l)
         if log_send is not None or log_recv is not None:
             l = logger.TeeLogger(
-                    log_send=_xwrap(log_send),
-                    log_recv=_xwrap(log_recv),
+                    log_send=_xwrap(log_send) if log_send is not None else None,
+                    log_recv=_xwrap(log_recv) if log_recv is not None else None,
                     log_yield=log_yield)
             loggers.append(l)
 
