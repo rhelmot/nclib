@@ -754,6 +754,10 @@ class Netcat:
     read_exactly = recv_exactly
     readexactly = recv_exactly
     recvexactly = recv_exactly
+    recv_exact = recv_exactly
+    read_exact = recv_exactly
+    readexact = recv_exactly
+    recvexact = recv_exactly
 
     interactive = interact
     ineraction = interact
