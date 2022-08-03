@@ -113,6 +113,10 @@ class Netcat:
     options specified here. For example, a url with the ``http://`` scheme
     will go over tcp and port 80.
 
+    You may use this constructor as a context manager, i.e.
+    ``with nclib.Netcat(...) as nc:``, and the socket will be automatically
+    closed when control exits the with-block.
+
     *Example 1:* Send a greeting to a UDP server listening at 192.168.3.6:8888
     and wait for a response. Log the conversation to stderr as hex.
 
@@ -411,6 +415,12 @@ class Netcat:
                     break
             self.peer = target
         self.logger.connected(self.peer)
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, ty, val, tb):
+        self.close()
 
     def add_logger(self, l):
         """
