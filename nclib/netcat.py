@@ -3,6 +3,7 @@ import re
 import socket
 import sys
 import time
+from urllib.parse import urlparse
 
 from . import simplesock, select, errors, logger
 
@@ -22,8 +23,6 @@ KNOWN_SCHEMES = {
     'ssh': (False, None, 22),
     'smtp': (False, None, 25),
 }
-
-from urllib.parse import urlparse
 
 def _is_ipv6_addr(addr):
     try:
@@ -258,7 +257,7 @@ class Netcat:
                     opts, pieces = getopt.getopt(target.split()[1:], 'u46lp:',
                                                  [])
                 except getopt.GetoptError as exc:
-                    raise ValueError(exc)
+                    raise ValueError(exc) from exc
 
                 for opt, arg in opts:
                     if opt == '-u':
@@ -307,7 +306,7 @@ class Netcat:
                 try:
                     scheme_udp, scheme_ipv6, scheme_port = KNOWN_SCHEMES[parsed.scheme]
                 except KeyError:
-                    raise ValueError("Unknown scheme: %s" % parsed.scheme)
+                    raise ValueError("Unknown scheme: %s" % parsed.scheme) from None
 
                 if scheme_udp is not None:
                     udp = scheme_udp
@@ -399,15 +398,15 @@ class Netcat:
                 try:
                     self.sock.connect(target)
                 except (socket.gaierror, socket.herror) as exc:
-                    raise errors.NetcatError('Could not connect to %r: %r' \
-                            % (target, exc))
+                    raise errors.NetcatError('Could not connect to %r' \
+                            % (target,)) from exc
                 except socket.error as exc:
                     if retry:
                         time.sleep(0.2)
                         retry -= 1
                     else:
-                        raise errors.NetcatError('Could not connect to %r: %r' \
-                                % (target, exc))
+                        raise errors.NetcatError('Could not connect to %r:' \
+                                % (target,)) from exc
                 else:
                     break
             self.peer = target
@@ -525,7 +524,7 @@ class Netcat:
         if timeout is not None:
             r, _, _ = select.select([self.sock], timeout=timeout)  # pylint: disable=no-member
             if not r:
-                raise errors.NetcatTimeout
+                raise errors.NetcatTimeout()
         try:
             data = self.sock.recv(size)
         except ConnectionResetError:
@@ -565,7 +564,7 @@ class Netcat:
                         if first_shot:
                             timeout = 0
                         else:
-                            raise errors.NetcatTimeout
+                            raise errors.NetcatTimeout()
                 first_shot = False
 
                 # step 3: receive a chunk with timeout and buffer it
@@ -581,8 +580,7 @@ class Netcat:
                         raise errors.NetcatEOF("Connection dropped!")
                     cut_at = len(self.buf)
                     break
-                else:
-                    self.eof = False
+                self.eof = False
 
         # handle interrupt
         except KeyboardInterrupt:
@@ -848,7 +846,7 @@ def ferry(left, right, ferry_left=True, ferry_right=True,
             for readable in r:
                 data = readable.recv()
                 if not data:
-                    raise errors.NetcatEOF
+                    raise errors.NetcatEOF()
 
                 if readable is left:
                     right.send(data)
