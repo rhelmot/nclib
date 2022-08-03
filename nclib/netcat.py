@@ -4,6 +4,7 @@ import socket
 import sys
 import time
 from urllib.parse import urlparse
+from typing import Optional, Union
 
 from . import simplesock, select, errors, logger
 
@@ -23,6 +24,15 @@ KNOWN_SCHEMES = {
     'ssh': (False, None, 22),
     'smtp': (False, None, 25),
 }
+BYTESISH = Union[bytes, str]
+
+def encode(b: BYTESISH) -> bytes:
+    if type(b) is str:
+        return b.encode()
+    elif type(b) is bytes:
+        return b
+    else:
+        raise ValueError("Value must be str or bytes (preferably bytes)")
 
 def _is_ipv6_addr(addr):
     try:
@@ -446,14 +456,14 @@ class Netcat:
 
     # inconsistent between sockets and files. support both
     @property
-    def closed(self):
+    def closed(self) -> bool:
         """
         Whether the socket has been closed by the user (not the peer).
         """
         return self.sock.closed
 
     @property
-    def _closed(self):
+    def _closed(self) -> bool:
         return self.closed
 
     def shutdown(self, how=socket.SHUT_RDWR):
@@ -488,7 +498,7 @@ class Netcat:
         """
         return self.shutdown(socket.SHUT_WR)
 
-    def fileno(self):
+    def fileno(self) -> int:
         """
         Return the file descriptor associated with this socket
         """
@@ -502,7 +512,7 @@ class Netcat:
         """
         self._timeout = timeout
 
-    def gettimeout(self):
+    def gettimeout(self) -> Optional[float]:
         """
         Retrieve the timeout currently associated with the socket
         """
@@ -519,12 +529,12 @@ class Netcat:
     # Core socket data functionality
     #
 
-    def _send(self, data):
+    def _send(self, data: bytes) -> int:
         ret = self.sock.send(data)
         self.logger.sending(data[:ret])
         return ret
 
-    def _recv(self, size, timeout=None):
+    def _recv(self, size: int, timeout: Optional[float]=None) -> bytes:
         """
         one-shot recv with timeout.
         all timeouts are expressed via raising errors.NetcatTimeout
@@ -542,7 +552,7 @@ class Netcat:
         self.logger.buffering(data)
         return data
 
-    def _recv_predicate(self, predicate, timeout, raise_eof=None):
+    def _recv_predicate(self, predicate, timeout: Optional[float], raise_eof: Optional[bool]=None) -> bytes:
         """
         this is the core function which ties together all the nclib features
         it will buffer data and call the predicate function on the buffer
@@ -619,12 +629,12 @@ class Netcat:
     # Public socket data functions
     #
 
-    def _fixup_timeout(self, timeout='default'):
+    def _fixup_timeout(self, timeout='default') -> Optional[float]:
         if timeout == 'default':
             return self._timeout
         return timeout
 
-    def recv(self, n=4096, timeout='default'):
+    def recv(self, n: int=4096, timeout='default') -> bytes:
         """
         Receive at most n bytes (default 4096) from the socket
 
@@ -635,7 +645,7 @@ class Netcat:
         self.logger.requesting_recv(n, timeout)
         return self._recv_predicate(lambda s: min(n, len(s)), timeout)
 
-    def recv_until(self, s, max_size=None, timeout='default'):
+    def recv_until(self, s: BYTESISH, max_size: Optional[int]=None, timeout='default') -> bytes:
         """
         Recieve data from the socket until the given substring is observed.
         Data in the same datagram as the substring, following the substring,
@@ -643,9 +653,7 @@ class Netcat:
 
         Aliases: read_until, readuntil, recvuntil
         """
-        if type(s) is str:
-            s = s.encode()
-
+        s = encode(s)
         timeout = self._fixup_timeout(timeout)
         self.logger.requesting_recv_until(s, max_size, timeout)
 
@@ -659,7 +667,7 @@ class Netcat:
                 return 0 if len(buf) < max_size else max_size
         return self._recv_predicate(_predicate, timeout)
 
-    def recv_all(self, timeout='default'):
+    def recv_all(self, timeout='default') -> bytes:
         """
         Return all data recieved until connection closes or the timeout
         elapses.
@@ -671,7 +679,7 @@ class Netcat:
         self.logger.requesting_recv_all(timeout)
         return self._recv_predicate(lambda s: 0, timeout, raise_eof=False)
 
-    def recv_exactly(self, n, timeout='default'):
+    def recv_exactly(self, n: int, timeout='default') -> bytes:
         """
         Recieve exactly n bytes
 
@@ -683,14 +691,13 @@ class Netcat:
         self.logger.requesting_recv_exactly(n, timeout)
         return self._recv_predicate(lambda s: n if len(s) >= n else 0, timeout)
 
-    def send(self, s):
+    def send(self, s: BYTESISH) -> int:
         """
         Sends all the given data to the socket.
 
         Aliases: write, put, sendall, send_all
         """
-        if type(s) is str:
-            s = s.encode()
+        s = encode(s)
         self.logger.requesting_send(s)
 
         out = len(s)
@@ -719,7 +726,7 @@ class Netcat:
 
     LINE_ENDING = b'\n'
 
-    def recv_line(self, max_size=None, timeout='default', ending=None):
+    def recv_line(self, max_size: Optional[int]=None, timeout='default', ending: Optional[BYTESISH]=None):
         """
         Recieve until the next newline , default "\\n". The newline string can
         be changed by changing ``nc.LINE_ENDING``. The newline will be returned
@@ -731,7 +738,7 @@ class Netcat:
             ending = self.LINE_ENDING
         return self.recv_until(ending, max_size, timeout)
 
-    def send_line(self, line, ending=None):
+    def send_line(self, line: BYTESISH, ending: Optional[BYTESISH]=None):
         """
         Write the string to the wire, followed by a newline. The newline string
         can be changed by specifying the ``ending`` param or changing
@@ -741,8 +748,8 @@ class Netcat:
         """
         if ending is None:
             ending = self.LINE_ENDING
-        if type(line) is str:
-            line = line.encode()
+        ending = encode(ending)
+        line = encode(line)
         return self.send(line + ending)
 
     #
