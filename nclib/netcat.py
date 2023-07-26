@@ -4,7 +4,7 @@ import socket
 import sys
 import time
 from urllib.parse import urlparse
-from typing import Optional, Union
+from typing import Optional, Union, Literal
 
 from . import simplesock, select, errors, logger
 
@@ -25,6 +25,7 @@ KNOWN_SCHEMES = {
     'smtp': (False, None, 25),
 }
 BYTESISH = Union[bytes, str]
+DFLOAT = Union[float, int, Literal['default'], None]
 
 def encode(b: BYTESISH) -> bytes:
     if type(b) is str:
@@ -629,12 +630,12 @@ class Netcat:
     # Public socket data functions
     #
 
-    def _fixup_timeout(self, timeout='default') -> Optional[float]:
+    def _fixup_timeout(self, timeout: DFLOAT = 'default') -> Optional[float]:
         if timeout == 'default':
             return self._timeout
         return timeout
 
-    def recv(self, n: int=4096, timeout='default') -> bytes:
+    def recv(self, n: int=4096, timeout: DFLOAT = 'default') -> bytes:
         """
         Receive at most n bytes (default 4096) from the socket
 
@@ -645,7 +646,7 @@ class Netcat:
         self.logger.requesting_recv(n, timeout)
         return self._recv_predicate(lambda s: min(n, len(s)), timeout)
 
-    def recv_until(self, s: BYTESISH, max_size: Optional[int]=None, timeout='default') -> bytes:
+    def recv_until(self, s: BYTESISH, max_size: Optional[int]=None, timeout: DFLOAT = 'default') -> bytes:
         """
         Recieve data from the socket until the given substring is observed.
         Data in the same datagram as the substring, following the substring,
@@ -667,7 +668,7 @@ class Netcat:
                 return 0 if len(buf) < max_size else max_size
         return self._recv_predicate(_predicate, timeout)
 
-    def recv_all(self, timeout='default') -> bytes:
+    def recv_all(self, timeout: DFLOAT = 'default') -> bytes:
         """
         Return all data recieved until connection closes or the timeout
         elapses.
@@ -679,7 +680,7 @@ class Netcat:
         self.logger.requesting_recv_all(timeout)
         return self._recv_predicate(lambda s: 0, timeout, raise_eof=False)
 
-    def recv_exactly(self, n: int, timeout='default') -> bytes:
+    def recv_exactly(self, n: int, timeout: DFLOAT = 'default') -> bytes:
         """
         Recieve exactly n bytes
 
@@ -726,7 +727,7 @@ class Netcat:
 
     LINE_ENDING = b'\n'
 
-    def recv_line(self, max_size: Optional[int]=None, timeout='default', ending: Optional[BYTESISH]=None):
+    def recv_line(self, max_size: Optional[int]=None, timeout: DFLOAT = 'default', ending: Optional[BYTESISH]=None):
         """
         Recieve until the next newline , default "\\n". The newline string can
         be changed by changing ``nc.LINE_ENDING``. The newline will be returned

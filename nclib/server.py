@@ -1,4 +1,5 @@
 import socket
+import select
 
 from . import Netcat
 
@@ -30,8 +31,16 @@ class TCPServer:
         self.sock.bind(bindto)
         self.sock.listen(kernel_backlog)
 
+        self._oob_rsock, self._oob_wsock = socket.socketpair()
+        self.closed = False
+
     def __iter__(self):
         while True:
+            rl, _, _ = select.select([self.sock, self._oob_rsock], [], [])
+            if self._oob_rsock in rl:
+                self._oob_rsock.close()
+                self._oob_wsock.close()
+                break
             client, addr = self.sock.accept()
             yield Netcat(sock=client, server=addr, **self.kwargs)
 
@@ -39,7 +48,10 @@ class TCPServer:
         """
         Tear down this server and release its resources
         """
-        return self.sock.close()
+        if not self.closed:
+            self.closed = True
+            self._oob_wsock.send(b'.')
+            self.sock.close()
 
 
 class UDPServer:
