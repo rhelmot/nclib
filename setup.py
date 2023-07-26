@@ -33,7 +33,7 @@ if bytes is str:
 
 from setuptools import setup
 setup(name='nclib',
-      version='1.0.2',
+      version='1.0.3',
       python_requires='>=3.5',
       packages=['nclib'],
       scripts=['serve-stdio'],
