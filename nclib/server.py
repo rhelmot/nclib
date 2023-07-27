@@ -1,3 +1,4 @@
+from typing import Tuple
 import socket
 import select
 
@@ -22,7 +23,7 @@ class TCPServer:
     ...     client.send(client.recv()) # or submit to a thread pool for async handling...
 
     """
-    def __init__(self, bindto, kernel_backlog=5, **kwargs):
+    def __init__(self, bindto: Tuple[str, int], kernel_backlog: int=5, **kwargs):
         self.addr = bindto
         self.kwargs = kwargs
 

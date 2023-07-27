@@ -1,8 +1,17 @@
+from typing import Tuple, List, TYPE_CHECKING, Iterable, Union
 import select as _select
+
+if TYPE_CHECKING:
+    from .netcat import Netcat
 
 # hey!!! did you know that you can have nested loops in list/dict/generator comprehensions????
 # GUESS WHAT WE'RE DOING HERE
-def select(select_read, select_write=(), select_exc=(), timeout=None):
+def select(
+        select_read: Iterable[Netcat],
+        select_write: Optional[Iterable[Netcat]]=None,
+        select_exc: Optional[Iterable[Netcat]]=None,
+        timeout: Union[None, int, float]=None
+) -> Tuple[List[Netcat], List[Netcat], List[Netcat]]:
     """
     A select function which works for any netcat or simplesock object.
     This function is a drop-in replacement for python's ``select.select``.
@@ -10,6 +19,10 @@ def select(select_read, select_write=(), select_exc=(), timeout=None):
     The main advantage is that sockets with multiple backing file descriptors
     are handled cleanly.
     """
+    if select_write is None:
+        select_write = []
+    if select_exc is None:
+        select_exc = []
     allsocks = set(sock for sockset in (select_read, select_write, select_exc) for sock in sockset)
     sock_mapping = {sock: sock._prep_select() for sock in allsocks}
 

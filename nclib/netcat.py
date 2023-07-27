@@ -35,7 +35,7 @@ def encode(b: BYTESISH) -> bytes:
     else:
         raise ValueError("Value must be str or bytes (preferably bytes)")
 
-def _is_ipv6_addr(addr):
+def _is_ipv6_addr(addr) -> bool:
     try:
         socket.inet_pton(socket.AF_INET6, addr)
     except socket.error:
@@ -174,7 +174,7 @@ class Netcat:
                  log_send=None, log_recv=None, log_yield=False,
                  echo_headers=True, echo_perline=True, echo_hex=False,
                  echo_send_prefix='>> ', echo_recv_prefix='<< ',
-            ):
+            ) -> None:
 
         # handle canned logger options
         if loggers is None:
@@ -427,19 +427,19 @@ class Netcat:
             self.peer = target
         self.logger.connected(self.peer)
 
-    def __enter__(self):
+    def __enter__(self) -> "Netcat":
         return self
 
-    def __exit__(self, ty, val, tb):
+    def __exit__(self, ty, val, tb) -> None:
         self.close()
 
-    def add_logger(self, l):
+    def add_logger(self, l) -> None:
         """
         Add the given logger to the list of current loggers
         """
         self.logger.children.append(l)
 
-    def remove_logger(self, l):
+    def remove_logger(self, l) -> None:
         """
         Remove the given logger from the list of current loggers
         """
@@ -449,7 +449,7 @@ class Netcat:
     # Socket metadata functionality
     #
 
-    def close(self):
+    def close(self) -> None:
         """
         Close the socket.
         """
@@ -467,7 +467,7 @@ class Netcat:
     def _closed(self) -> bool:
         return self.closed
 
-    def shutdown(self, how=socket.SHUT_RDWR):
+    def shutdown(self, how=socket.SHUT_RDWR) -> None:
         """
         Send a shutdown signal for one or both of reading and writing. Valid
         arguments are ``socket.SHUT_RDWR``, ``socket.SHUT_RD``, and
@@ -485,14 +485,14 @@ class Netcat:
         """
         return self.sock.shutdown(how)
 
-    def shutdown_rd(self):
+    def shutdown_rd(self) -> NOne:
         """
         Send a shutdown signal for reading - you may no longer read from this
         socket.
         """
         return self.shutdown(socket.SHUT_RD)
 
-    def shutdown_wr(self):
+    def shutdown_wr(self) -> None:
         """
         Send a shutdown signal for writing - you may no longer write to this
         socket.
@@ -505,7 +505,7 @@ class Netcat:
         """
         return self.sock.fileno()
 
-    def settimeout(self, timeout):
+    def settimeout(self, timeout) -> None:
         """
         Set the default timeout in seconds to use for subsequent socket
         operations. Set to None to wait forever, or 0 to be effectively
@@ -519,7 +519,7 @@ class Netcat:
         """
         return self._timeout
 
-    def flush(self):
+    def flush(self) -> None:
         # no output buffering
         pass
 
@@ -706,7 +706,7 @@ class Netcat:
             s = s[self._send(s):]
         return out
 
-    def interact(self, insock=sys.stdin, outsock=sys.stdout):
+    def interact(self, insock=sys.stdin, outsock=sys.stdout) -> None:
         """
         Connects the socket to the terminal for user interaction.
         Alternate input and output files may be specified.
@@ -727,7 +727,7 @@ class Netcat:
 
     LINE_ENDING = b'\n'
 
-    def recv_line(self, max_size: Optional[int]=None, timeout: DFLOAT = 'default', ending: Optional[BYTESISH]=None):
+    def recv_line(self, max_size: Optional[int]=None, timeout: DFLOAT = 'default', ending: Optional[BYTESISH]=None) -> bytes:
         """
         Recieve until the next newline , default "\\n". The newline string can
         be changed by changing ``nc.LINE_ENDING``. The newline will be returned
@@ -739,7 +739,7 @@ class Netcat:
             ending = self.LINE_ENDING
         return self.recv_until(ending, max_size, timeout)
 
-    def send_line(self, line: BYTESISH, ending: Optional[BYTESISH]=None):
+    def send_line(self, line: BYTESISH, ending: Optional[BYTESISH]=None) -> int:
         """
         Write the string to the wire, followed by a newline. The newline string
         can be changed by specifying the ``ending`` param or changing
@@ -796,7 +796,7 @@ class Netcat:
     writeln = send_line
     sendln = send_line
 
-def merge(children, **kwargs):
+def merge(children, **kwargs) -> Netcat:
     """
     Return a Netcat object whose receives will be the merged stream of all the
     given children sockets.
@@ -819,7 +819,7 @@ def _xwrap(sock):
 
 
 def ferry(left, right, ferry_left=True, ferry_right=True,
-        suppress_timeout=True, suppress_raise_eof=False):
+        suppress_timeout=True, suppress_raise_eof=False) -> None:
     """
     Establish a linkage between two socks, automatically copying any data
     that becomes available between the two.
