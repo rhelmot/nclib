@@ -43,5 +43,6 @@ setup(name='nclib',
       author='rhelmot',
       author_email='audrey@rhelmot.io',
       license='MIT',
-      keywords='netcat nc socket sock file pipe tcp udp recv until logging interact handle listen connect server serve stdio process gdb'
+      keywords='netcat nc socket sock file pipe tcp udp recv until logging interact handle listen connect server serve stdio process gdb',
+      package_data={'nclib': ['py.typed']},
       )
