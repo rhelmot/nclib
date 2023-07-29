@@ -485,7 +485,7 @@ class Netcat:
         """
         return self.sock.shutdown(how)
 
-    def shutdown_rd(self) -> NOne:
+    def shutdown_rd(self) -> None:
         """
         Send a shutdown signal for reading - you may no longer read from this
         socket.

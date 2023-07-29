@@ -1,4 +1,4 @@
-from typing import Tuple, List, TYPE_CHECKING, Iterable, Union
+from typing import Tuple, List, TYPE_CHECKING, Iterable, Union, Optional
 import select as _select
 
 if TYPE_CHECKING:
@@ -7,11 +7,11 @@ if TYPE_CHECKING:
 # hey!!! did you know that you can have nested loops in list/dict/generator comprehensions????
 # GUESS WHAT WE'RE DOING HERE
 def select(
-        select_read: Iterable[Netcat],
-        select_write: Optional[Iterable[Netcat]]=None,
-        select_exc: Optional[Iterable[Netcat]]=None,
+        select_read: Iterable["Netcat"],
+        select_write: Optional[Iterable["Netcat"]]=None,
+        select_exc: Optional[Iterable["Netcat"]]=None,
         timeout: Union[None, int, float]=None
-) -> Tuple[List[Netcat], List[Netcat], List[Netcat]]:
+) -> Tuple[List["Netcat"], List["Netcat"], List["Netcat"]]:
     """
     A select function which works for any netcat or simplesock object.
     This function is a drop-in replacement for python's ``select.select``.
