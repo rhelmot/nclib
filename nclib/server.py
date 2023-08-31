@@ -79,6 +79,7 @@ class UDPServer:
         self.addr = bindto
         self.dgram_size = dgram_size
         self.sock = socket.socket(type=socket.SOCK_DGRAM)
+        self.sock.bind(bindto)
 
     def __iter__(self):
         while True:
