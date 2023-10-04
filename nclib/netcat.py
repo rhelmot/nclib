@@ -46,7 +46,7 @@ def _is_ipv6_addr(addr) -> bool:
 class Netcat:
     """
     This is the main class you will use to interact with a peer over the
-    network! You may instanciate this class to either connect to a server,
+    network! You may instantiate this class to either connect to a server,
     listen for a one-off client, or wrap an existing sock/pipe/whatever.
 
     One of the following must be passed in order to initialize a Netcat
