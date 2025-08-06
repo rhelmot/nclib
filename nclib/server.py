@@ -1,8 +1,9 @@
-from typing import Tuple
+from typing import Optional, Tuple
 import socket
 import select
 
 from . import Netcat
+from .netcat import _is_ipv6_addr
 
 class TCPServer:
     """
@@ -11,6 +12,7 @@ class TCPServer:
 
     :param bindto:          The address to bind to, a tuple (host, port)
     :param kernel_backlog:  The argument to listen()
+    :param family:          The address family to use. set to `socket.AF_INET6` for IPv6.
 
     Any additional keyword arguments will be passed to the constructor of the
     Netcat object that is constructed for each client.
@@ -23,11 +25,13 @@ class TCPServer:
     ...     client.send(client.recv()) # or submit to a thread pool for async handling...
 
     """
-    def __init__(self, bindto: Tuple[str, int], kernel_backlog: int=5, **kwargs):
+    def __init__(self, bindto: Tuple[str, int], kernel_backlog: int=5, family: Optional[int]=None, **kwargs):
         self.addr = bindto
         self.kwargs = kwargs
 
-        self.sock = socket.socket(type=socket.SOCK_STREAM)
+        if family is None:
+            family = socket.AF_INET6 if _is_ipv6_addr(bindto[0]) else socket.AF_INET
+        self.sock = socket.socket(type=socket.SOCK_STREAM, family=family)
         self.sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
         self.sock.bind(bindto)
         self.sock.listen(kernel_backlog)
